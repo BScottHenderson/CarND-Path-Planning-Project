@@ -1,6 +1,7 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <string>
 #include <vector>
@@ -90,7 +91,7 @@ vector<double> getFrenet(double x, double y, double theta,
   int prev_wp;
   prev_wp = next_wp-1;
   if (next_wp == 0) {
-    prev_wp  = maps_x.size()-1;
+    prev_wp  = (int) maps_x.size()-1;
   }
 
   double n_x = maps_x[next_wp]-maps_x[prev_wp];
