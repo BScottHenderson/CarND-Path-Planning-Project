@@ -11,11 +11,23 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\src\constants.h" />
+    <ClInclude Include="..\..\src\cost.h" />
     <ClInclude Include="..\..\src\helpers.h" />
+    <ClInclude Include="..\..\src\JMT.h" />
     <ClInclude Include="..\..\src\json.hpp" />
+    <ClInclude Include="..\..\src\spline.h" />
+    <ClInclude Include="..\..\src\vehicle.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\src\cost.cpp" />
+    <ClCompile Include="..\..\src\helpers.cpp" />
+    <ClCompile Include="..\..\src\JMT.cpp" />
     <ClCompile Include="..\..\src\main.cpp" />
+    <ClCompile Include="..\..\src\vehicle.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\CMakeLists.txt" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
