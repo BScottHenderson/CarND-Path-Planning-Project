@@ -36,7 +36,7 @@ double goal_distance_cost(const Vehicle &vehicle,
     double distance = data["distance_to_goal"];
     if (distance > 0) {
         int delta = (vehicle.goal_lane - (int) data["intended_lane"])
-                    + (vehicle.goal_lane - (int) data["final_lane"]);
+                  + (vehicle.goal_lane - (int) data["final_lane"]);
         cost = (double) (1 - 2*exp(-(abs(delta) / distance)));
     } else {
         cost = 1;
@@ -84,16 +84,16 @@ double lane_speed(const map<int, vector<Vehicle>> &predictions, int lane) {
 }
 
 double calculate_cost(const Vehicle &vehicle, 
-                     const map<int, vector<Vehicle>> &predictions, 
-                     const vector<Vehicle> &trajectory) {
+                      const map<int, vector<Vehicle>> &predictions, 
+                      const vector<Vehicle> &trajectory) {
     // Sum weighted cost functions to get total cost for trajectory.
     double cost = 0.0;
     map<string, double> trajectory_data = get_helper_data(vehicle, trajectory, predictions);
 
     // Add additional cost functions here.
     vector<std::function<double(const Vehicle &, const vector<Vehicle> &, 
-                               const map<int, vector<Vehicle>> &, 
-                               map<string, double> &)
+                                const map<int, vector<Vehicle>> &, 
+                                map<string, double> &)
     >> cf_list = {goal_distance_cost, inefficiency_cost};
 
     vector<double> weight_list = {REACH_GOAL, EFFICIENCY};
@@ -107,8 +107,8 @@ double calculate_cost(const Vehicle &vehicle,
 }
 
 map<string, double> get_helper_data(const Vehicle &vehicle, 
-                                   const vector<Vehicle> &trajectory, 
-                                   const map<int, vector<Vehicle>> &predictions) {
+                                    const vector<Vehicle> &trajectory, 
+                                    const map<int, vector<Vehicle>> &predictions) {
     // Generate helper data to use in cost functions:
     // intended_lane: the current lane +/- 1 if vehicle is planning or 
     //   executing a lane change.
@@ -118,7 +118,7 @@ map<string, double> get_helper_data(const Vehicle &vehicle,
     // Note that intended_lane and final_lane are both included to help 
     //   differentiate between planning and executing a lane change in the 
     //   cost functions.
-    map<string, double>  trajectory_data;
+    map<string, double> trajectory_data;
     Vehicle             trajectory_last = trajectory[1];
 
     int                 intended_lane;
@@ -130,8 +130,8 @@ map<string, double> get_helper_data(const Vehicle &vehicle,
         intended_lane = trajectory_last.lane;
     }
 
-    double   distance_to_goal = vehicle.goal_s - trajectory_last.s;
-    int     final_lane      = trajectory_last.lane;
+    double  distance_to_goal = vehicle.goal_s - trajectory_last.s;
+    int     final_lane       = trajectory_last.lane;
     trajectory_data["intended_lane"]    = (double) intended_lane;
     trajectory_data["final_lane"]       = (double) final_lane;
     trajectory_data["distance_to_goal"] = distance_to_goal;
