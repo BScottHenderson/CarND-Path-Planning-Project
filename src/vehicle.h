@@ -56,7 +56,6 @@ public:
 
     int         lane, goal_lane, lanes_available;
     double      s, goal_s;
-    double      d;
     double      v, target_speed;
     double      a, max_acceleration;
     string      state;

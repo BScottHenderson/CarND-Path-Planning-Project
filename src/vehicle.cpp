@@ -15,7 +15,6 @@ Vehicle::Vehicle(){}
 Vehicle::Vehicle(int lane, double s, double v, double a, string state) {
     this->lane  = lane;
     this->s     = s;
-    this->d     = lane_to_d(this->lane);
     this->v     = v;
     this->a     = a;
     this->state = state;
@@ -324,11 +323,10 @@ vector<Vehicle> Vehicle::generate_predictions(int horizon) {
 
 void Vehicle::realize_next_state(vector<Vehicle> &trajectory) {
     // Sets state and kinematics for ego vehicle using the last state of the trajectory.
-    Vehicle next_state = trajectory[1];
+    Vehicle next_state = trajectory[trajectory.size()-1];
     this->state = next_state.state;
     this->lane  = next_state.lane;
     this->s     = next_state.s;
-    this->d     = lane_to_d(this->lane);
     this->v     = next_state.v;
     this->a     = next_state.a;
 }
