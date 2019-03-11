@@ -22,6 +22,6 @@ constexpr auto PREFERRED_BUFFER_LANE_CHANGE = 30.0;     // Distance to any vehic
 // Use a larger number to maintain a smoother trajectory.
 // Use a smaller value to allow the ego vehicle to repond more quickly
 // to changing conditions.
-constexpr auto PREVIOUS_POINTS_TO_KEEP      = 10;
+constexpr auto PREVIOUS_POINTS_TO_KEEP      = 20;
 
 #endif CONSTANTS_H
