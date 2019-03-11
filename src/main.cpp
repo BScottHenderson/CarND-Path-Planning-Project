@@ -29,9 +29,12 @@ void StraightLineTrajectory(double car_x, double car_y, double car_yaw,
                             vector<double>& next_x_vals, vector<double>& next_y_vals);
 void CircleTrajectory(double car_x, double car_y, double car_yaw,
                       vector<double>& next_x_vals, vector<double>& next_y_vals);
+
 void PathPlannerTrajectory(
-    double car_x, double car_y, double car_s, double car_yaw,
+    double car_yaw,
+
     Vehicle& ego,
+    vector<Vehicle>& traffic,
     vector<double>& map_waypoints_x, vector<double>& map_waypoints_y, vector<double>& map_waypoints_s,
     vector<double> previous_path_x, vector<double> previous_path_y,
     vector<double>& next_x_vals, vector<double>& next_y_vals);
@@ -78,9 +81,11 @@ int main() {
     }
     std::wcout << "Read " << map_waypoints_x.size() << " waypoints from '" << map_file_.c_str() << "'." << std::endl;
 
-    vector<double>  ego_config = {SPEED_LIMIT, (double) LANE_COUNT, 0.0, 1.0, MAX_ACCELERATION};
-    Vehicle ego = Vehicle(1, 0.0, 0.0, 0.0, "KL");
-    ego.configure(ego_config);
+    // Create the ego Vehicle object here. Initialization occurs in the
+    // 'onConnection' message handler. This allows restarting the simulation
+    // without exiting either the simulator or this app. Why is that desirable?
+    // Because the other vehicle traffic is randomly generated.
+    Vehicle ego;
 
 #ifdef _WIN32
     h.onMessage([&ego,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy]
@@ -101,12 +106,13 @@ int main() {
                     // j[1] is the data JSON object
           
                     // Main car's localization Data
-                    double  car_x     = j[1]["x"];
-                    double  car_y     = j[1]["y"];
-                    double  car_s     = j[1]["s"];
-                    double  car_d     = j[1]["d"];
-                    double  car_yaw   = j[1]["yaw"];
-                    double  car_speed = j[1]["speed"];
+                                                        // Initial values:
+                    double  car_x     = j[1]["x"];      // 909.48
+                    double  car_y     = j[1]["y"];      // 1128.67
+                    double  car_s     = j[1]["s"];      // 124.8336
+                    double  car_d     = j[1]["d"];      // 6.164833
+                    double  car_yaw   = j[1]["yaw"];    // 0.0
+                    double  car_speed = j[1]["speed"];  // 0.0
 
                     // Previous path data given to the Planner
                     auto    previous_path_x = j[1]["previous_path_x"];
@@ -177,35 +183,82 @@ int main() {
                         along the road, then its future predicted Frenet s value will be its current
                         s value plus its (transformed) total velocity (m/s) multiplied by the time
                         elapsed into the future (s).
+
+
+                        Bicycle model:
+
+                        x' = x + d * cos(theta)
+                        y' = y + d * sin(theta)
+                        theta' = (theta + beta) mod (2 * pi)
+
+                        Since yaw angle is with respect to fixed coordinates, longitudinal and lateral positions with
+                        respect to the inertial fixed coordinates are found as follows:
+
+                        r = psi_dot
+
+                        v_X = v_x * cos(psi) - v_y * sin(psi)
+                        v_Y = v_x * sin(psi) + v_y * cos(psi)
+
+                        where v_X and v_Y denote the velocity components with respect to the fixed inertial coordinates.
                     */
 
-                    // Translate sensor fusion data into a traffic map.
-                    map<int, Vehicle>   traffic;
-                    for (auto car : sensor_fusion) {
-                        int id = car[0];
-                        int lane = d_to_lane(car[6]);
-                        double s  = car[5];
-                        double vx = car[3];
-                        double vy = car[4];
-                        double v = sqrt(vx * vx + vy * vy);
-                        traffic[id] = Vehicle(lane, s, v, 0.0, "CS");
-                    }
+                    // Update the ego vehicle.
+                    int closestWaypoint = ClosestWaypoint(car_x, car_y, map_waypoints_x, map_waypoints_y);
+                    double  dx = map_waypoints_dx[closestWaypoint];
+                    double  dy = map_waypoints_dy[closestWaypoint];
 
-                    // Generate predictions for each vehicle in the traffic map.
+                    ego.lane = d_to_lane(car_d);
+                    ego.s    = previous_path_x.size() > 0 ? end_path_s : car_s;
+                    ego.d    = car_d;
+                    //ego.v    = car_speed;
+
+                    //vector<double> xy = getXY(car_s, car_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+                    //std::cout << "(" << car_x << ", " << car_y << ") : "
+                    //          << "(" << xy[0] << ", " << xy[1] << ")" << std::endl;
+
+                    // Generate predictions for each vehicle in our sensor fusion data.
+                    vector<Vehicle>             traffic;
                     map<int, vector<Vehicle>>   predictions;
-                    for (auto car : traffic) {
-                        predictions[car.first] = car.second.generate_predictions();
+                    for (auto car : sensor_fusion) {
+                        int     id   = car[0];
+
+                        double  s    = car[5];
+                        double  d    = car[6];
+                        double  vx   = car[3];
+                        double  vy   = car[4];
+                        double  v    = sqrt(vx * vx + vy * vy);
+
+                        int     lane = d_to_lane(d);
+                        if (lane < 0)
+                            continue;
+
+                        Vehicle car  = Vehicle(lane, s, d, v, 0.0, "CS");
+
+                        traffic.push_back(car);
+                        predictions[id] = car.generate_predictions();
                     }
 
                     // Add predictions for the ego vehicle.
                     predictions[-1] = ego.generate_predictions();
 
-                    // Calculate a trajectory for the ego vehicle.
-                    vector<Vehicle> trajectory = ego.choose_next_state(predictions);
-                    ego.realize_next_state(trajectory);
+                    //// Calculate a trajectory for the ego vehicle based on predictions.
+                    //vector<Vehicle> trajectory = ego.choose_next_state(predictions);
+
+                    //// grab the current ego position to use as starting point
+                    //ego.realize_next_state(trajectory);
+                    //// grab the current ego position (now updated) to use as target
 
                     //StraightLineTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
                     //CircleTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
+
+                    PathPlannerTrajectory(
+                        car_yaw,
+
+                        ego,
+                        traffic,
+                        map_waypoints_x, map_waypoints_y, map_waypoints_s,
+                        previous_path_x, previous_path_y,
+                        next_x_vals, next_y_vals);
 #ifdef notdef
 
                     int     prev_path_size = std::min(PREVIOUS_POINTS_TO_KEEP, (int) previous_path_x.size());
@@ -295,12 +348,6 @@ int main() {
                         }
                     }
 #endif
-                    PathPlannerTrajectory(
-                        car_x, car_y, car_s, car_yaw,
-                        ego,
-                        map_waypoints_x, map_waypoints_y, map_waypoints_s,
-                        previous_path_x, previous_path_y,
-                        next_x_vals, next_y_vals);
 
                     // Send path data to the controller.
                     json    msgJson;
@@ -327,11 +374,22 @@ int main() {
     }); // end h.onMessage
 
 #ifdef _WIN32
-    h.onConnection([&h](uWS::WebSocket<uWS::SERVER>* ws, uWS::HttpRequest req) {
+    h.onConnection([&h,&ego](uWS::WebSocket<uWS::SERVER>* ws, uWS::HttpRequest req) {
 #else
-    h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
+    h.onConnection([&h,&ego](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
 #endif // _WIN32
         std::cout << "Connected!!!" << std::endl;
+
+        // Initialize the ego vehicle object.
+        double  goal_s    = 0.0;
+        double  goal_lane = 2.0;
+        vector<double>  ego_config = {SPEED_LIMIT, (double) LANE_COUNT, goal_s, goal_lane, MAX_ACCELERATION};
+        int     lane = 1;       // Initial lane (1 == middle lane).
+        double  s, d, v, a;     // Initial (s, d) position and velocity, acceleration.
+        s = 0.0; d = 0.0; v = 0.0; a = 0.0;
+        string  state = "KL";   // Keep Lane
+        ego = Vehicle(lane, s, d, v, a, "KL");
+        ego.configure(ego_config);
     });
 
 #ifdef _WIN32
@@ -393,12 +451,19 @@ void CircleTrajectory(double car_x, double car_y, double car_yaw,
     }
 }
 
+#ifdef notdef
 void PathPlannerTrajectory(
-    double car_x, double car_y, double car_s, double car_yaw,
+    double car_x, double car_y, double car_yaw,
     Vehicle& ego,
+    vector<Vehicle>& traffic,
     vector<double>& map_waypoints_x, vector<double>& map_waypoints_y, vector<double>& map_waypoints_s,
     vector<double> previous_path_x, vector<double> previous_path_y,
     vector<double>& next_x_vals, vector<double>& next_y_vals) {
+
+
+    // Reference velocity to target
+    static double ref_vel = 0.0; // mph
+
 
     int     prev_path_size = std::min(PREVIOUS_POINTS_TO_KEEP, (int) previous_path_x.size());
 
@@ -407,6 +472,78 @@ void PathPlannerTrajectory(
         next_x_vals.push_back(previous_path_x[i]);
         next_y_vals.push_back(previous_path_y[i]);
     }
+
+
+    int prev_size = (int)previous_path_x.size();
+
+    //if (prev_size > 0) {
+    //	car_s = end_path_s;
+    //}
+
+    // Lane identifiers for other cars
+    bool too_close = false;
+    bool car_left = false;
+    bool car_right = false;
+
+    // Find ref_v to use, see if car is in lane
+    for (auto car : traffic) {
+        // Check width of lane, in case cars are merging into our lane
+        double check_speed = car.v;
+        double check_car_s = car.s;
+
+        // If using previous points can project an s value outwards in time
+        // (What position we will be in in the future)
+        // check s values greater than ours and s gap
+        check_car_s += ((double)prev_size*0.02*car.v);
+
+        int gap = 30; // m
+
+        // Identify whether the car is ahead, to the left, or to the right
+        if (car.lane == ego.lane) {
+            // Another car is ahead
+            too_close |= (check_car_s > ego.s) && ((check_car_s - ego.s) < gap);
+        } else if (car.lane - ego.lane == 1) {
+            // Another car is to the right
+            car_right |= ((ego.s - gap) < check_car_s) && ((ego.s + gap) > check_car_s);
+        } else if (ego.lane - car.lane == 1) {
+            // Another car is to the left
+            car_left |= ((ego.s - gap) < check_car_s) && ((ego.s + gap) > check_car_s);
+        }
+    }
+
+    // Modulate the speed to avoid collisions. Change lanes if it is safe to do so (nobody to the side)
+    //double acc = 0.224;
+    //double max_speed = 49.5;
+    if (too_close) {
+        // A car is ahead
+        // Decide to shift lanes or slow down
+        if (!car_right && ego.lane < 2) {
+            // No car to the right AND there is a right lane -> shift right
+            ego.lane++;
+        } else if (!car_left && ego.lane > 0) {
+            // No car to the left AND there is a left lane -> shift left
+            ego.lane--;
+        } else {
+            // Nowhere to shift -> slow down
+            ref_vel -= MAX_ACCELERATION;
+        }
+    } else {
+        if (ego.lane != 1) {
+            // Not in the center lane. Check if it is safe to move back
+            if ((ego.lane == 2 && !car_left) || (ego.lane == 0 && !car_right)) {
+                // Move back to the center lane
+                ego.lane = 1;
+            }
+        }
+                
+        if (ref_vel < SPEED_LIMIT) {
+            // No car ahead AND we are below the speed limit -> speed limit
+            ref_vel += MAX_ACCELERATION;
+        }
+    }
+
+    ego.v = ref_vel;
+
 
     // Collect points for the path we want to follow.
     vector<double>  path_x;
@@ -451,50 +588,71 @@ void PathPlannerTrajectory(
         path_x.push_back(pos_x);  path_y.push_back(pos_y);
     }
 
-
-    // Add waypoints for current car position plus 30, 60, 90 meters.
-    int lane_d = (int) round(ego.d);
-    vector<double> next_wp0 = getXY(car_s+30, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    vector<double> next_wp1 = getXY(car_s+60, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    vector<double> next_wp2 = getXY(car_s+90, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    // Add waypoints for current car position (s) plus 30, 60, 90 meters,
+    // staying in the same lane. This will ensure that our spline actually
+    // follows the road.
+    double  lane_d = lane_to_d(ego.lane);
+    lane_d = 2 + 4 * ego.lane;
+    std::cout << "ego: d=" << ego.d << " lane_d=" << lane_d
+              << (ego.d == lane_d ? "OK" : "*****")
+              << std::endl;
+    vector<double> next_wp0 = getXY(ego.s+30, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    vector<double> next_wp1 = getXY(ego.s+60, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    vector<double> next_wp2 = getXY(ego.s+90, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
     path_x.push_back(next_wp0[0]); path_y.push_back(next_wp0[1]);
     path_x.push_back(next_wp1[0]); path_y.push_back(next_wp1[1]);
     path_x.push_back(next_wp2[0]); path_y.push_back(next_wp2[1]);
 
-    for (int i = 0; i < path_x.size(); i++) {
-        // shift car reference angle to 0 degrees
-        double shift_x = path_x[i] - pos_x;
-        double shift_y = path_y[i] - pos_y;
+    // Our current list of points is:
+    //  prev_pos    point before the starting position
+    //  pos         starting position
+    //  wp0         current position + 20m
+    //  wp1         current position + 40m
+    //  wp2         current position + 60m
+    // The 'angle' is the heading between 'prev_pos' and 'pos'.
 
-        path_x[i] = (shift_x * cos(-angle) - shift_y * sin(-angle));
-        path_y[i] = (shift_x * sin(-angle) + shift_y * cos(-angle));
+    // x = x * cos(angle) - y * sin(angle)
+    // y = x * sin(angle) + y * cos(angle)
+
+    // Before we create a spline for our path, adjust the (x, y)
+    // coordinates so that the angle is 0 degrees in vehicle space.
+    for (int i = 0; i < path_x.size(); i++) {
+        double delta_x = path_x[i] - pos_x;
+        double delta_y = path_y[i] - pos_y;
+
+        path_x[i] = delta_x * cos(-angle) - delta_y * sin(-angle);
+        path_y[i] = delta_x * sin(-angle) + delta_y * cos(-angle);
     }
 
-    // create a spline
+    // Create a spline from our path points.
     tk::spline s;
     s.set_points(path_x, path_y);
 
-    // Set the target for 30m down the road.
-    double target_x = 30.0;
-    double target_y = s(target_x);
-    double target_dist = sqrt(pow(target_x, 2) + pow(target_y, 2));
+    // Set the target position to the current ego position.
+    // Recall that the ego vehicle object has already been updated with new trajectory info.
+    vector<double> target = getXY(ego.s+30, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    double  target_x = target[0];
+    double  target_y = target[1];
+    double  target_dist = sqrt(pow(target_x, 2) + pow(target_y, 2));
 
-    // Slowly increase speed to the max.
-    if (ego.v < SPEED_LIMIT)
-        ego.v += 0.1;
+    // Slowly increase speed to the max speed.
+    //if (ego.v < SPEED_LIMIT)
+    //    ego.v += 0.1;
 
     // Calculate the number of steps.
     // We want to cover the target distance at a given speed.
     // The car moves every 0.02 seconds. So the distance traveled
     // for each car movement is just (0.02 * speed). Divide the
     // target distance by this value to get the number of steps.
-    double N = target_dist / (0.02 * ego.v);
+    double  N = target_dist / (0.02 * ego.v);
 
     // Change in x required to get to our target value in N steps.
-    double delta_x = target_x / N;
+    double  delta_x = target_x / N;
 
-    double prev_x = 0.0;
+    // Add points until we reach the magic number of 50 (which at 20ms
+    // per step is a horizon of 1s).
+    double  prev_x = 0.0;
     for (int i = 1; i < 50 - prev_path_size; i++) {
 
         double x = prev_x + delta_x;
@@ -502,9 +660,221 @@ void PathPlannerTrajectory(
 
         prev_x = x;
 
-        // rotate back to normal after rotating to vehicle space
-        double new_x = pos_x + (x * cos(angle) - y * sin(angle));
-        double new_y = pos_y + (x * sin(angle) + y * cos(angle));
+        // Undo the translation from global space to vehicle space
+        // that we performed before creating the spline so that the
+        // (x, y) values we send to the controller are in global space.
+        double  new_x = pos_x + (x * cos(angle) - y * sin(angle));
+        double  new_y = pos_y + (x * sin(angle) + y * cos(angle));
+
+        next_x_vals.push_back(new_x);
+        next_y_vals.push_back(new_y);
+    }
+}
+#endif
+
+void PathPlannerTrajectory(
+    double car_yaw,
+
+    Vehicle& ego,
+    vector<Vehicle>& traffic,
+    vector<double>& map_waypoints_x, vector<double>& map_waypoints_y, vector<double>& map_waypoints_s,
+    vector<double> previous_path_x, vector<double> previous_path_y,
+    vector<double>& next_x_vals, vector<double>& next_y_vals) {
+
+    int     prev_path_size = std::min(PREVIOUS_POINTS_TO_KEEP, (int) previous_path_x.size());
+    prev_path_size = (int) previous_path_x.size();
+
+    // Before adding new path points, add a few path points from the previous
+    // cycle to maintain continuity.
+    for (int i = 0; i < prev_path_size; ++i) {
+        next_x_vals.push_back(previous_path_x[i]);
+        next_y_vals.push_back(previous_path_y[i]);
+    }
+
+
+    // *****************************************************************
+    // ****************** ADJUST LANE / SPEED **************************
+    // *****************************************************************
+
+    // Lane identifiers for other cars
+    bool too_close = false;
+    bool car_left = false;
+    bool car_right = false;
+
+    // Find ref_v to use, see if car is in lane
+    for (auto car : traffic) {
+        // Adjust the other vehicle 's' position by adding 'prev_path_size' steps.
+        // We know that each step is 20ms (0.02s) and that the other vehicle
+        // is moving at velocity 'car.v'.
+        double check_car_s = car.s + (prev_path_size * 0.02 * car.v);
+
+        // Identify whether the car is ahead, to the left, or to the right
+        if (car.lane == ego.lane) {
+            // Another car is ahead
+            too_close |= (check_car_s > ego.s) && ((check_car_s - ego.s) < PREFERRED_BUFFER_LANE_CHANGE);
+        } else if (car.lane - ego.lane == 1) {
+            // Another car is to the right
+            car_right |= ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s) && ((ego.s + PREFERRED_BUFFER_LANE_CHANGE) > check_car_s);
+        } else if (ego.lane - car.lane == 1) {
+            // Another car is to the left
+            car_left |= ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s) && ((ego.s + PREFERRED_BUFFER_LANE_CHANGE) > check_car_s);
+        }
+    }
+
+    // Modulate the speed to avoid collisions. Change lanes if it is safe to do so (nobody to the side)
+    if (too_close) {
+        // A car is ahead
+        // Decide to shift lanes or slow down
+        if (!car_right && ego.lane < 2) {
+            // No car to the right AND there is a right lane -> shift right
+            ego.lane++;
+        } else if (!car_left && ego.lane > 0) {
+            // No car to the left AND there is a left lane -> shift left
+            ego.lane--;
+        } else {
+            // Nowhere to shift -> slow down
+            ego.v -= MAX_ACCELERATION;
+        }
+    } else {
+        if (ego.lane != 1) {
+            // Not in the center lane. Check if it is safe to move back
+            if ((ego.lane == 2 && !car_left) || (ego.lane == 0 && !car_right)) {
+                // Move back to the center lane
+                ego.lane = 1;
+            }
+        }
+                
+        if (ego.v < SPEED_LIMIT) {
+            // No car ahead AND we are below the speed limit -> speed limit
+            ego.v += MAX_ACCELERATION;
+        }
+    }
+
+    // *****************************************************************
+    // *****************************************************************
+    // *****************************************************************
+
+
+    // Collect points for the path we want to follow.
+    vector<double>  path_x;
+    vector<double>  path_y;
+
+    // Starting point & angle.
+    double  start_x;
+    double  start_y;
+    double  angle;
+
+    // If we don't have at least two previous path points to use,
+    // just use the ego car's current location as a starting point.
+    double  prev_x;
+    double  prev_y;
+    if (prev_path_size < 2) {
+        // Start at the current ego car position.
+        vector<double> xy = getXY(ego.s, ego.d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+        start_x = xy[0];
+        start_y = xy[1];
+
+        // Find the assumed previous ego car position.
+        // Bicycle model:
+        //  x' = x + d cos(theta)
+        //  y' = y + d sin(theta)
+        // We're backing up by one meter so d == 1 and we subtract instead of add.
+        prev_x = start_x - cos(car_yaw);
+        prev_y = start_y - sin(car_yaw);
+
+        // Just use the current ego car heading as our current angle.
+        angle = deg2rad(car_yaw);
+    } else {
+        // Start at the current end-of-path.
+        start_x = previous_path_x[prev_path_size-1];
+        start_y = previous_path_y[prev_path_size-1];
+
+        // Penultimate path point.
+        prev_x = previous_path_x[prev_path_size-2];
+        prev_y = previous_path_y[prev_path_size-2];
+
+        // Heading between last two path points is our current angle.
+        angle = atan2(start_y - prev_y, start_x - prev_x);
+    }
+    path_x.push_back(prev_x);  path_y.push_back(prev_y);
+    path_x.push_back(start_x); path_y.push_back(start_y);
+
+
+    // Add waypoints for current car position (s) plus 30, 60, 90 meters,
+    // staying in the same lane. This will ensure that our spline actually
+    // follows the road.
+    double  lane_d = lane_to_d(ego.lane);
+    vector<double> next_wp0 = getXY(ego.s+30, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    vector<double> next_wp1 = getXY(ego.s+60, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    vector<double> next_wp2 = getXY(ego.s+90, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
+    path_x.push_back(next_wp0[0]); path_y.push_back(next_wp0[1]);
+    path_x.push_back(next_wp1[0]); path_y.push_back(next_wp1[1]);
+    path_x.push_back(next_wp2[0]); path_y.push_back(next_wp2[1]);
+
+
+    // Our current list of points is:
+    //  prev_pos    point before the starting position
+    //  pos         starting position
+    //  wp0         current position + 20m
+    //  wp1         current position + 40m
+    //  wp2         current position + 60m
+    // The 'angle' is the heading between 'prev_pos' and 'pos'.
+
+    // x = x * cos(angle) - y * sin(angle)
+    // y = x * sin(angle) + y * cos(angle)
+
+    // Before we create a spline for our path, adjust the (x, y)
+    // coordinates so that the angle is 0 degrees in vehicle space.
+    for (int i = 0; i < path_x.size(); i++) {
+        double delta_x = path_x[i] - start_x;
+        double delta_y = path_y[i] - start_y;
+
+        path_x[i] = delta_x * cos(-angle) - delta_y * sin(-angle);
+        path_y[i] = delta_x * sin(-angle) + delta_y * cos(-angle);
+    }
+
+    // Create a spline from our path points.
+    tk::spline s;
+    s.set_points(path_x, path_y);
+
+    // Set the target position to the current ego position.
+    // Recall that the ego vehicle object has already been updated with new trajectory info.
+//    vector<double> target = getXY(ego.s+30, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+//    double  target_x = target[0];
+//    double  target_y = target[1];
+
+    // Set the target position to 30m down the road along the spline we just created.
+    double  target_x = 30.0;
+    double  target_y = s(target_x);
+
+    double  target_dist = sqrt(pow(target_x, 2) + pow(target_y, 2));
+
+    // Calculate the number of steps.
+    // We want to cover the target distance at a given speed.
+    // The car moves every 0.02 seconds. So the distance traveled
+    // for each car movement is just (0.02 * speed). Divide the
+    // target distance by this value to get the number of steps.
+    double  N = target_dist / (0.02 * ego.v);
+
+    // Change in x required to get to our target value in N steps.
+    double  delta_x = target_x / N;
+
+    // Add points until we reach the magic number of 50 (which at 20ms
+    // per step is a horizon of 1s).
+    prev_x = prev_y = 0.0;
+    for (int i = 0; i < 50 - prev_path_size; i++) {
+
+        double x = prev_x + delta_x;
+        double y = s(x);    // Spline
+
+        prev_x = x;
+
+        // Undo the translation from global space to vehicle space
+        // that we performed before creating the spline so that the
+        // (x, y) values we send to the controller are in global space.
+        double  new_x = start_x + (x * cos(angle) - y * sin(angle));
+        double  new_y = start_y + (x * sin(angle) + y * cos(angle));
 
         next_x_vals.push_back(new_x);
         next_y_vals.push_back(new_y);
