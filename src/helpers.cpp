@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <iostream>
 
 #include "constants.h"
 
@@ -43,7 +44,10 @@ double  lane_to_d(int lane) {
     return lane * LANE_WIDTH + HALF_LANE_WIDTH;
 }
 int     d_to_lane(double d) {
-    return (int) round((d - HALF_LANE_WIDTH) / LANE_WIDTH);
+    int     lane = (int) round((d - HALF_LANE_WIDTH) / LANE_WIDTH);
+    if (lane >= LANE_COUNT)
+        lane = -1;
+    return lane;
 }
 
 // Calculate closest waypoint to current x, y position
