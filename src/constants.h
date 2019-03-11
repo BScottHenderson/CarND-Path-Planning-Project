@@ -18,6 +18,9 @@ constexpr auto MAX_ACCELERATION             = 0.1;
 constexpr auto PREFERRED_BUFFER_FRONT       = 6.0;      // Distance to a vehicle in front.
 constexpr auto PREFERRED_BUFFER_LANE_CHANGE = 30.0;     // Distance to any vehicle in the target lane for lane changes.
 
+// Distance (meters) along the path for the next point.
+constexpr auto PATH_STEP                    = 30.0;
+
 // Number of points to keep from the previous path for each iteration.
 // Use a larger number to maintain a smoother trajectory.
 // Use a smaller value to allow the ego vehicle to repond more quickly
