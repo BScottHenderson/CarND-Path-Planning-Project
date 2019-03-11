@@ -697,8 +697,8 @@ void PathPlannerTrajectory(
     // *****************************************************************
 
     // Lane identifiers for other cars
-    bool too_close = false;
-    bool car_left = false;
+    bool car_ahead = false;
+    bool car_left  = false;
     bool car_right = false;
 
     // Find ref_v to use, see if car is in lane
@@ -711,7 +711,7 @@ void PathPlannerTrajectory(
         // Identify whether the car is ahead, to the left, or to the right
         if (car.lane == ego.lane) {
             // Another car is ahead
-            too_close |= (check_car_s > ego.s) && ((check_car_s - ego.s) < PREFERRED_BUFFER_LANE_CHANGE);
+            car_ahead |= (check_car_s > ego.s) && ((check_car_s - ego.s) < PREFERRED_BUFFER_LANE_CHANGE);
         } else if (car.lane - ego.lane == 1) {
             // Another car is to the right
             car_right |= ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s) && ((ego.s + PREFERRED_BUFFER_LANE_CHANGE) > check_car_s);
@@ -722,31 +722,27 @@ void PathPlannerTrajectory(
     }
 
     // Modulate the speed to avoid collisions. Change lanes if it is safe to do so (nobody to the side)
-    if (too_close) {
-        // A car is ahead
-        // Decide to shift lanes or slow down
-        if (!car_right && ego.lane < 2) {
-            // No car to the right AND there is a right lane -> shift right
+    if (car_ahead) {
+        // A car is ahead - change lanes if we can, else slow down.
+        if (!car_right && ego.lane < 2)
+            // No car to the right and we're not already in the right lane.
             ego.lane++;
-        } else if (!car_left && ego.lane > 0) {
-            // No car to the left AND there is a left lane -> shift left
+        else if (!car_left && ego.lane > 0)
+            // No car to the left and we're not already in the left lane.
             ego.lane--;
-        } else {
+        else
             // Nowhere to shift -> slow down
             ego.v -= MAX_ACCELERATION;
-        }
     } else {
-        if (ego.lane != 1) {
-            // Not in the center lane. Check if it is safe to move back
-            if ((ego.lane == 2 && !car_left) || (ego.lane == 0 && !car_right)) {
-                // Move back to the center lane
-                ego.lane = 1;
-            }
-        }
-                
+        // Stay in the center lane if possible.
+        if (ego.lane != 1 && ((ego.lane == 2 && !car_left) || (ego.lane == 0 && !car_right)))
+            ego.lane = 1;
+
+        // If there is no car ahead and we're still below the speed limit, speed up!
         if (ego.v < SPEED_LIMIT) {
-            // No car ahead AND we are below the speed limit -> speed limit
             ego.v += MAX_ACCELERATION;
+            if (ego.v < SPEED_LIMIT / 2)
+                ego.v += MAX_ACCELERATION;
         }
     }
 
