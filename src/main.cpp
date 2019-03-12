@@ -168,40 +168,6 @@ int main() {
                         right_lane_y = waypoint_y + (waypoint_dx * 10.0)
                             multiply by 10.0 to get to the middle of the right lane
                             2.0 m to get to the middle of the left lane + 8.0 m to move over two lanes
-
-                        getXY() helper function - converts Frenet (s, d) to (x, y)
-
-
-                        The sensor_fusion variable contains all the information about the cars on the
-                        right-hand side of the road.
-
-                        The data format for each car is: [id, x, y, vx, vy, s, d]. The id is a unique
-                        identifier for that car. The x, y values are in global map coordinates, and
-                        the vx, vy values are the velocity components, also in reference to the global
-                        map. Finally s and d are the Frenet coordinates for that car.
-
-                        The vx, vy values can be useful for predicting where the cars will be in the
-                        future. For instance, if you were to assume that the tracked car kept moving
-                        along the road, then its future predicted Frenet s value will be its current
-                        s value plus its (transformed) total velocity (m/s) multiplied by the time
-                        elapsed into the future (s).
-
-
-                        Bicycle model:
-
-                        x' = x + d * cos(theta)
-                        y' = y + d * sin(theta)
-                        theta' = (theta + beta) mod (2 * pi)
-
-                        Since yaw angle is with respect to fixed coordinates, longitudinal and lateral positions with
-                        respect to the inertial fixed coordinates are found as follows:
-
-                        r = psi_dot
-
-                        v_X = v_x * cos(psi) - v_y * sin(psi)
-                        v_Y = v_x * sin(psi) + v_y * cos(psi)
-
-                        where v_X and v_Y denote the velocity components with respect to the fixed inertial coordinates.
                     */
 
                     // Update the ego vehicle.
@@ -216,7 +182,8 @@ int main() {
                         vector<double> sd =
                             getFrenet(previous_path_x[prev_path_size-1], previous_path_y[prev_path_size-1], car_yaw,
                                       map_waypoints_x, map_waypoints_y);
-                        ego.lane = d_to_lane(sd[1]);
+                        //ego.lane = d_to_lane(sd[1]);
+                        // Do *not* update the ego car lane for all non-initial iterations.
                         ego.s    = sd[0];
                     }
 
@@ -224,6 +191,7 @@ int main() {
                     vector<Vehicle>             traffic;
                     map<int, vector<Vehicle>>   predictions;
                     for (auto car : sensor_fusion) {
+                        // The data format for each car is: [id, x, y, vx, vy, s, d].
                         int     id   = car[0];
 
                         double  s    = car[5];
@@ -248,11 +216,10 @@ int main() {
                     // Calculate a trajectory for the ego vehicle based on predictions.
                     vector<Vehicle> trajectory = ego.choose_next_state(predictions);
 
-                    //// grab the current ego position to use as starting point
-//                    ego.realize_next_state(trajectory);
-                    //// grab the current ego position (now updated) to use as target
+                    // Update the ego vehicle state using the calculated trajectory.
+                    //ego.realize_next_state(trajectory);
 
-                    // Update the 'ego' vehicle (lane, velocity) and generate a path (next_x_vals, next_y_vals).
+                    // Update the ego vehicle state.
                     UpdateEgo(ego, traffic, previous_path_x, previous_path_y);
 
                     // Generate a trajectory using the update ego information.
@@ -384,24 +351,26 @@ void UpdateEgo(
         double  t = prev_path_size * 0.02;
         double  check_car_s = car.s + car.v * t;
 
-        // Identify whether the car is ahead, to the left, or to the right.
-        bool    car_ahead_within_buffer =
-            // car ahead        &&
-            ego.s < check_car_s &&// within buffer distance ahead
-                    check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE);
-        bool    car_within_buffer =
-            // car within buffer distance behind                 &&
-            (ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s &&// car within buffer distance ahead
-                                                     check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE);
-        if (car.lane == ego.lane) {             // Car in our lane.
-            if (car_ahead_within_buffer)
+        // Identify whether other vehicle is ahead, to the left, or to the right.
+        switch (car.lane - ego.lane) {
+        case 0:     // Car in our lane.
+            // If the car is ahead of us and within the buffer distance, set the flag.
+            if (ego.s < check_car_s &&
+                        check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE))
                 car_ahead = true;
-        } else if (car.lane - ego.lane == 1) {  // Car to the right.
-            if (car_within_buffer)
-                car_right = true;
-        } else if (ego.lane - car.lane == 1) {  // Car to the left.
-            if (car_within_buffer)
+            break;
+        case -1:    // Car to the left.
+            // If car is within the buffer distance of our location, set the flag.
+            if ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s &&
+                                                         check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE))
                 car_left = true;
+            break;
+        case 1:     // Car to the right.
+            // If car is within the buffer distance of our location, set the flag.
+            if ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s &&
+                                                         check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE))
+                car_right = true;
+            break;
         }
     }
 
@@ -533,7 +502,7 @@ void PathPlannerTrajectory(
     // The target y position is set using the spline we just created.
     // Recall that the ego vehicle object has already been updated with new trajectory info.
     vector<double> target = getXY(ego.s + PATH_STEP, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    double  target_x = PATH_STEP;// target[0];
+    double  target_x = target[0];
     double  target_y = s(target_x);
     double  target_dist = sqrt(pow(target_x, 2) + pow(target_y, 2));
 
