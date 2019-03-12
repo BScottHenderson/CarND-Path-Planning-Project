@@ -30,11 +30,16 @@ void StraightLineTrajectory(double car_x, double car_y, double car_yaw,
 void CircleTrajectory(double car_x, double car_y, double car_yaw,
                       vector<double>& next_x_vals, vector<double>& next_y_vals);
 
+void UpdateEgo(
+    Vehicle& ego,
+    vector<Vehicle>& traffic,
+    vector<double> previous_path_x, vector<double> previous_path_y);
+
 void PathPlannerTrajectory(
-    Vehicle& ego, vector<Vehicle>& traffic,
+    Vehicle& ego,
     vector<double>& map_waypoints_x, vector<double>& map_waypoints_y, vector<double>& map_waypoints_s,
-    vector<double> previous_path_x, vector<double> previous_path_y,
-    vector<double>& next_x_vals, vector<double>& next_y_vals);
+    vector<double>  previous_path_x, vector<double>  previous_path_y,
+    vector<double>& next_x_vals,     vector<double>& next_y_vals);
 
 int main() {
     uWS::Hub h;
@@ -234,28 +239,31 @@ int main() {
                         Vehicle car  = Vehicle(lane, s, v, 0.0, "CS");
 
                         traffic.push_back(car);
-                        predictions[id] = car.generate_predictions();
+                        predictions[id] = car.generate_predictions(PREDICTION_HORIZON);
                     }
 
                     // Add predictions for the ego vehicle.
-                    predictions[-1] = ego.generate_predictions();
+                    predictions[-1] = ego.generate_predictions(PREDICTION_HORIZON);
 
                     // Calculate a trajectory for the ego vehicle based on predictions.
                     vector<Vehicle> trajectory = ego.choose_next_state(predictions);
 
                     //// grab the current ego position to use as starting point
-                    //ego.realize_next_state(trajectory);
+//                    ego.realize_next_state(trajectory);
                     //// grab the current ego position (now updated) to use as target
+
+                    // Update the 'ego' vehicle (lane, velocity) and generate a path (next_x_vals, next_y_vals).
+                    UpdateEgo(ego, traffic, previous_path_x, previous_path_y);
+
+                    // Generate a trajectory using the update ego information.
+                    PathPlannerTrajectory(
+                        ego,
+                        map_waypoints_x, map_waypoints_y, map_waypoints_s,
+                        previous_path_x, previous_path_y,
+                        next_x_vals,     next_y_vals);
 
                     //StraightLineTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
                     //CircleTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
-
-                    // Update the 'ego' vehicle (lane, velocity) and generate a path (next_x_vals, next_y_vals).
-                    PathPlannerTrajectory(
-                        ego, traffic,
-                        map_waypoints_x, map_waypoints_y, map_waypoints_s,
-                        previous_path_x, previous_path_y,
-                        next_x_vals, next_y_vals);
 
                     // Send path data to the controller.
                     json    msgJson;
@@ -356,25 +364,13 @@ void CircleTrajectory(double car_x, double car_y, double car_yaw,
     }
 }
 
-void PathPlannerTrajectory(
-    Vehicle& ego, vector<Vehicle>& traffic,
-    vector<double>& map_waypoints_x, vector<double>& map_waypoints_y, vector<double>& map_waypoints_s,
-    vector<double>  previous_path_x, vector<double>  previous_path_y,
-    vector<double>& next_x_vals,     vector<double>& next_y_vals) {
+void UpdateEgo(
+    Vehicle& ego,
+    vector<Vehicle>& traffic,
+    vector<double> previous_path_x, vector<double> previous_path_y) {
+    // Update (lane, v) for the ego vehicle.
 
     int     prev_path_size = std::min(PREVIOUS_POINTS_TO_KEEP, (int) previous_path_x.size());
-
-    // Before adding new path points, add a few path points from the previous
-    // cycle to maintain continuity.
-    for (int i = 0; i < prev_path_size; ++i) {
-        next_x_vals.push_back(previous_path_x[i]);
-        next_y_vals.push_back(previous_path_y[i]);
-    }
-
-
-    // *****************************************************************
-    // ****************** ADJUST LANE / SPEED **************************
-    // *****************************************************************
 
     // Lane identifiers for other cars
     bool car_ahead = false;
@@ -386,32 +382,33 @@ void PathPlannerTrajectory(
         // Adjust the other vehicle 's' position by adding 'prev_path_size' steps.
         // We know that each step is 20ms (0.02s) and that the other vehicle
         // is moving at velocity 'car.v'.
-        double check_car_s = car.s + (prev_path_size * 0.02 * car.v);
+        double t = prev_path_size * 0.02;
+        double check_car_s = car.s + car.v * t;
 
         // Identify whether the car is ahead, to the left, or to the right
         if (car.lane == ego.lane) {
-            // Another car is ahead
+            // The car is ahead and within the buffer distance.
             car_ahead |= (check_car_s > ego.s) && ((check_car_s - ego.s) < PREFERRED_BUFFER_LANE_CHANGE);
         } else if (car.lane - ego.lane == 1) {
-            // Another car is to the right
-            car_right |= ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s) && ((ego.s + PREFERRED_BUFFER_LANE_CHANGE) > check_car_s);
+            // The car is to the right and within the buffer distance.
+            car_right |= ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s) && (check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE));
         } else if (ego.lane - car.lane == 1) {
-            // Another car is to the left
-            car_left |= ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s) && ((ego.s + PREFERRED_BUFFER_LANE_CHANGE) > check_car_s);
+            // The car is to the left and within the buffer distance.
+            car_left |= ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s) && (check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE));
         }
     }
 
-    // Modulate the speed to avoid collisions. Change lanes if it is safe to do so (nobody to the side)
+    // Adjust speed to avoid collisions. Change lanes if it is safe to do so.
     if (car_ahead) {
         // A car is ahead - change lanes if we can, else slow down.
-        if (!car_right && ego.lane < 2)
-            // No car to the right and we're not already in the right lane.
-            ego.lane++;
-        else if (!car_left && ego.lane > 0)
+        if (!car_left && ego.lane > 0)
             // No car to the left and we're not already in the left lane.
             ego.lane--;
+        else if (!car_right && ego.lane < 2)
+            // No car to the right and we're not already in the right lane.
+            ego.lane++;
         else
-            // Nowhere to shift -> slow down
+            // We're boxed in so just slow down.
             ego.v -= MAX_ACCELERATION;
     } else {
         // Stay in the center lane if possible.
@@ -419,16 +416,26 @@ void PathPlannerTrajectory(
             ego.lane = 1;
 
         // If there is no car ahead and we're still below the speed limit, speed up!
-        if (ego.v < SPEED_LIMIT) {
+        if (ego.v < SPEED_LIMIT)
             ego.v += MAX_ACCELERATION;
-            if (ego.v < SPEED_LIMIT / 2)
-                ego.v += MAX_ACCELERATION;
-        }
     }
+}
 
-    // *****************************************************************
-    // *****************************************************************
-    // *****************************************************************
+void PathPlannerTrajectory(
+    Vehicle& ego,
+    vector<double>& map_waypoints_x, vector<double>& map_waypoints_y, vector<double>& map_waypoints_s,
+    vector<double>  previous_path_x, vector<double>  previous_path_y,
+    vector<double>& next_x_vals,     vector<double>& next_y_vals) {
+    // Generate a smooth path for the ego vehicle.
+
+    int     prev_path_size = std::min(PREVIOUS_POINTS_TO_KEEP, (int) previous_path_x.size());
+
+    // Before adding new path points, add a few path points from the previous
+    // cycle to maintain continuity.
+    for (int i = 0; i < prev_path_size; ++i) {
+        next_x_vals.push_back(previous_path_x[i]);
+        next_y_vals.push_back(previous_path_y[i]);
+    }
 
 
     // Collect points for the path we want to follow.
@@ -486,13 +493,10 @@ void PathPlannerTrajectory(
     // staying in the same lane. This will ensure that our spline actually
     // follows the road.
     double  ego_d = lane_to_d(ego.lane);
-    vector<double> next_wp0 = getXY(ego.s + PATH_STEP    , ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    vector<double> next_wp1 = getXY(ego.s + PATH_STEP * 2, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    vector<double> next_wp2 = getXY(ego.s + PATH_STEP * 3, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-    path_x.push_back(next_wp0[0]); path_y.push_back(next_wp0[1]);
-    path_x.push_back(next_wp1[0]); path_y.push_back(next_wp1[1]);
-    path_x.push_back(next_wp2[0]); path_y.push_back(next_wp2[1]);
+    for (int i = 1; i <= WAYPOINTS_TO_ADD; ++i) {
+        vector<double> next_wp = getXY(ego.s + PATH_STEP * i , ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+        path_x.push_back(next_wp[0]); path_y.push_back(next_wp[1]);
+    }
 
 
     // Our current list of points is:
@@ -524,7 +528,7 @@ void PathPlannerTrajectory(
     // The target y position is set using the spline we just created.
     // Recall that the ego vehicle object has already been updated with new trajectory info.
     vector<double> target = getXY(ego.s + PATH_STEP, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    double  target_x = target[0];
+    double  target_x = PATH_STEP;// target[0];
     double  target_y = s(target_x);
     double  target_dist = sqrt(pow(target_x, 2) + pow(target_y, 2));
 
