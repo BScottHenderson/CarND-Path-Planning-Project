@@ -175,7 +175,7 @@ vector<double> Vehicle::get_kinematics(map<int, vector<Vehicle>> &predictions,
 
     if (get_vehicle_ahead(predictions, lane, vehicle_ahead)) {
         if (get_vehicle_behind(predictions, lane, vehicle_behind)) {
-            // must travel at the speed of traffic, regardless of preferred buffer
+            // Must travel at the speed of traffic, regardless of preferred buffer.
             new_velocity = vehicle_ahead.v;
         } else {
             double  max_velocity_in_front =
@@ -258,8 +258,9 @@ vector<Vehicle> Vehicle::lane_change_trajectory(string state,
     //   that spot).
     for (auto pred : predictions) {
         auto next_lane_vehicle = pred.second[0];
-        if (next_lane_vehicle.s == this->s && next_lane_vehicle.lane == new_lane)
-// check for a buffer here rather than current 's' equal to other vehicle 's' ???
+        if (next_lane_vehicle.lane == new_lane &&
+            (this->s - PREFERRED_BUFFER_LANE_CHANGE) < next_lane_vehicle.s &&
+                                                       next_lane_vehicle.s < (this->s + PREFERRED_BUFFER_LANE_CHANGE))
             // If lane change is not possible, return empty trajectory.
             return trajectory;
     }
@@ -288,10 +289,13 @@ bool Vehicle::get_vehicle_behind(map<int, vector<Vehicle>> &predictions,
     double  max_s = -1;
     bool    found_vehicle = false;
     for (auto pred : predictions) {
-        auto temp_vehicle = pred.second[0];
-        if (temp_vehicle.lane == this->lane && temp_vehicle.s < this->s && temp_vehicle.s > max_s) {
-            max_s = temp_vehicle.s;
-            rVehicle = temp_vehicle;
+        auto    vehicle = pred.second[0];
+        if (vehicle.lane == lane && vehicle.s < this->s && vehicle.s > max_s) {
+        //  ^^^^^^^^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^
+        //  Car in the indicated lane
+        //                          Car behind us          Car closer than other cars behind us
+            max_s = vehicle.s;
+            rVehicle = vehicle;
             found_vehicle = true;
         }
     }
@@ -303,13 +307,16 @@ bool Vehicle::get_vehicle_ahead(map<int, vector<Vehicle>> &predictions,
                                 int lane, Vehicle &rVehicle) {
     // Returns a true if a vehicle is found ahead of the current vehicle, false 
     //   otherwise. The passed reference rVehicle is updated if a vehicle is found.
-    double  min_s = this->goal_s;
+    double  min_s = std::numeric_limits<double>::max();
     bool    found_vehicle = false;
     for (auto pred : predictions) {
-        auto temp_vehicle = pred.second[0];
-        if (temp_vehicle.lane == this->lane && temp_vehicle.s > this->s && temp_vehicle.s < min_s) {
-            min_s = temp_vehicle.s;
-            rVehicle = temp_vehicle;
+        auto    vehicle = pred.second[0];
+        if (vehicle.lane == lane && vehicle.s > this->s && vehicle.s < min_s) {
+        //  ^^^^^^^^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^
+        //  Car in the indicated lane
+        //                          Car ahead of us        Car closer than other cars behind us
+            min_s = vehicle.s;
+            rVehicle = vehicle;
             found_vehicle = true;
         }
     }
