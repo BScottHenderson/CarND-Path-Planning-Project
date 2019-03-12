@@ -298,6 +298,7 @@ int main() {
 
         // Initialize the ego vehicle object.
         ego = Vehicle(-1, 0.0, 0.0, 0.0, "KL"); // (lane, s) are initialized in the first iteration.
+                                                // KL == Keep Lane
 
         double  goal_s    = 0.0;
         double  goal_lane = 1.0;    // Stay in the middle lane (0 == left lane, 1 == middle lane, 2 == right lane)
@@ -372,29 +373,35 @@ void UpdateEgo(
 
     int     prev_path_size = std::min(PREVIOUS_POINTS_TO_KEEP, (int) previous_path_x.size());
 
-    // Lane identifiers for other cars
-    bool car_ahead = false;
-    bool car_left  = false;
-    bool car_right = false;
-
-    // Find ref_v to use, see if car is in lane
+    // Check other cars in traffic: Are there other cars ahead or to either side?
+    bool    car_ahead = false;
+    bool    car_left  = false;
+    bool    car_right = false;
     for (auto car : traffic) {
         // Adjust the other vehicle 's' position by adding 'prev_path_size' steps.
         // We know that each step is 20ms (0.02s) and that the other vehicle
         // is moving at velocity 'car.v'.
-        double t = prev_path_size * 0.02;
-        double check_car_s = car.s + car.v * t;
+        double  t = prev_path_size * 0.02;
+        double  check_car_s = car.s + car.v * t;
 
-        // Identify whether the car is ahead, to the left, or to the right
-        if (car.lane == ego.lane) {
-            // The car is ahead and within the buffer distance.
-            car_ahead |= (check_car_s > ego.s) && ((check_car_s - ego.s) < PREFERRED_BUFFER_LANE_CHANGE);
-        } else if (car.lane - ego.lane == 1) {
-            // The car is to the right and within the buffer distance.
-            car_right |= ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s) && (check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE));
-        } else if (ego.lane - car.lane == 1) {
-            // The car is to the left and within the buffer distance.
-            car_left |= ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s) && (check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE));
+        // Identify whether the car is ahead, to the left, or to the right.
+        bool    car_ahead_within_buffer =
+            // car ahead        &&
+            ego.s < check_car_s &&// within buffer distance ahead
+                    check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE);
+        bool    car_within_buffer =
+            // car within buffer distance behind                 &&
+            (ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s &&// car within buffer distance ahead
+                                                     check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE);
+        if (car.lane == ego.lane) {             // Car in our lane.
+            if (car_ahead_within_buffer)
+                car_ahead = true;
+        } else if (car.lane - ego.lane == 1) {  // Car to the right.
+            if (car_within_buffer)
+                car_right = true;
+        } else if (ego.lane - car.lane == 1) {  // Car to the left.
+            if (car_within_buffer)
+                car_left = true;
         }
     }
 
@@ -404,7 +411,7 @@ void UpdateEgo(
         if (!car_left && ego.lane > 0)
             // No car to the left and we're not already in the left lane.
             ego.lane--;
-        else if (!car_right && ego.lane < 2)
+        else if (!car_right && ego.lane < MAX_LANE)
             // No car to the right and we're not already in the right lane.
             ego.lane++;
         else
@@ -412,7 +419,7 @@ void UpdateEgo(
             ego.v -= MAX_ACCELERATION;
     } else {
         // Stay in the center lane if possible.
-        if (ego.lane != 1 && ((ego.lane == 2 && !car_left) || (ego.lane == 0 && !car_right)))
+        if (ego.lane != 1 && ((ego.lane == MAX_LANE && !car_left) || (ego.lane == 0 && !car_right)))
             ego.lane = 1;
 
         // If there is no car ahead and we're still below the speed limit, speed up!
@@ -502,10 +509,8 @@ void PathPlannerTrajectory(
     // Our current list of points is:
     //  prev        point before the starting position
     //  start       starting position
-    //  wp0         current position + PATH_STEP
-    //  wp1         current position + PATH_STEP * 2
-    //  wp2         current position + PATH_STEP * 3
-    // The 'angle' is the heading between 'prev_pos' and 'pos'.
+    //  wp*         current position + PATH_STEP * i where i=1..WAYPOINTS_TO_ADD
+    // The 'angle' is the heading between 'prev' and 'start'.
 
     // x = x * cos(angle) - y * sin(angle)
     // y = x * sin(angle) + y * cos(angle)
