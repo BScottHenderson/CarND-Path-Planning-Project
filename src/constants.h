@@ -21,10 +21,13 @@ constexpr auto PREFERRED_BUFFER_LANE_CHANGE = 30.0;     // Distance to any vehic
 // Distance (meters) along the path for the next point.
 constexpr auto PATH_STEP                    = 30.0;
 
+// Number of points in a path for each iteration. (50 points at 20ms per point == 1s)
+constexpr auto PATH_LENGTH                  = 50;
+
 // Number of points to keep from the previous path for each iteration.
 // Use a larger number to maintain a smoother trajectory.
 // Use a smaller value to allow the ego vehicle to repond more quickly
 // to changing conditions.
-constexpr auto PREVIOUS_POINTS_TO_KEEP      = 20;
+constexpr auto PREVIOUS_POINTS_TO_KEEP      = 35;
 
 #endif CONSTANTS_H
