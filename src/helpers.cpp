@@ -138,16 +138,17 @@ std::vector<double> getXY(double s, double d,
                           const std::vector<double> &maps_x, 
                           const std::vector<double> &maps_y) {
     // Find the waypoint that is before 's'.
-    int prev_wp = -1;
+    int     prev_wp = -1;
     while (s > maps_s[prev_wp + 1] && prev_wp < (int) maps_s.size() - 1)
         ++prev_wp;
 
     // We know 'prev_sp' is before 's' so get the next waypoint after that.
-    // So that 's' is between 'prev_wp' and 'wp2'.
-    int wp2 = (prev_wp + 1) % maps_x.size();
+    // So that 's' is between 'prev_wp' and 'next_wp'. This will allow us
+    // to determine the heading.
+    int     next_wp = (prev_wp + 1) % maps_x.size();
 
-    // Calcuate the heading between 'prev_sp' and 'wp2'.
-    double  heading = atan2(maps_y[wp2] - maps_y[prev_wp], maps_x[wp2] - maps_x[prev_wp]);
+    // Calcuate the heading between 'prev_sp' and 'next_wp'.
+    double  heading = atan2(maps_y[next_wp] - maps_y[prev_wp], maps_x[next_wp] - maps_x[prev_wp]);
 
     // Distance from 'prev_wp' to 's'.
     double  seg_s = (s - maps_s[prev_wp]);
@@ -156,15 +157,15 @@ std::vector<double> getXY(double s, double d,
     double  seg_x = maps_x[prev_wp] + seg_s * cos(heading);
     double  seg_y = maps_y[prev_wp] + seg_s * sin(heading);
 
-    // Adjust the heading from 'prev_wp' to 'wp2' so that it is
+    // Adjust the heading from 'prev_wp' to 'next_wp' so that it is
     // perpendicular to that line.
-    double perp_heading = heading - pi()/2;
+    double  perp_heading = heading - pi()/2;
 
     // Translate (x, y) along the segment to actual (x, y) by
     // taking traveling along the perpendicular heading by a
     // distance of 'd'.
-    double x = seg_x + d * cos(perp_heading);
-    double y = seg_y + d * sin(perp_heading);
+    double  x = seg_x + d * cos(perp_heading);
+    double  y = seg_y + d * sin(perp_heading);
 
     return {x, y};
 }
