@@ -278,7 +278,7 @@ void Vehicle::increment(int dt = 1) {
 }
 
 double Vehicle::position_at(int t) {
-    return (double) (this->s + this->v*t + this->a*t*t/2.0);
+    return (double) (this->s + this->v*t + 0.5*this->a*t*t);
 }
 
 bool Vehicle::get_vehicle_behind(map<int, vector<Vehicle>> &predictions, 
@@ -337,11 +337,11 @@ vector<Vehicle> Vehicle::generate_predictions(int horizon) {
 void Vehicle::realize_next_state(vector<Vehicle> &trajectory) {
     // Sets state and kinematics for ego vehicle using the last state of the trajectory.
     Vehicle next_state = trajectory[trajectory.size()-1];
-    this->state = next_state.state;
     this->lane  = next_state.lane;
     this->s     = next_state.s;
     this->v     = next_state.v;
     this->a     = next_state.a;
+    this->state = next_state.state;
 }
 
 void Vehicle::configure(vector<double> &road_data) {
