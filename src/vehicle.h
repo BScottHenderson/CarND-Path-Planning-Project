@@ -13,7 +13,7 @@ class Vehicle {
 public:
     // Constructors
     Vehicle();
-    Vehicle(int lane, double s, double d, double v, double a, string state="CS");
+    Vehicle(int lane, double s, double v, double a, string state="CS");
 
     // Destructor
     virtual ~Vehicle();
@@ -56,7 +56,6 @@ public:
 
     int         lane, goal_lane, lanes_available;
     double      s, goal_s;
-    double      d;
     double      v, target_speed;
     double      a, max_acceleration;
     string      state;
