@@ -200,13 +200,20 @@ int main() {
                     */
 
                     // Update the ego vehicle.
-                    int closestWaypoint = ClosestWaypoint(car_x, car_y, map_waypoints_x, map_waypoints_y);
-                    double  dx = map_waypoints_dx[closestWaypoint];
-                    double  dy = map_waypoints_dy[closestWaypoint];
-
-                    ego.lane = d_to_lane(car_d);
-                    ego.s    = previous_path_x.size() > 0 ? end_path_s : car_s;
-                    //ego.v    = car_speed;
+                    if (previous_path_x.size() == 0) {
+                        ego.lane = d_to_lane(car_d);
+                        ego.s    = car_s;
+                    } else {
+                        // We can't just use 'end_path_s' because we may not keep all of the previous
+                        // path points (see the PREVIOUS_POINTS_TO_KEEP constant). So find the last
+                        // point that we are keeping and translate that (x, y) location to (s, d).
+                        int prev_path_size = std::min(PREVIOUS_POINTS_TO_KEEP, (int) previous_path_x.size());
+                        vector<double> sd =
+                            getFrenet(previous_path_x[prev_path_size-1], previous_path_y[prev_path_size-1], car_yaw,
+                                      map_waypoints_x, map_waypoints_y);
+                        ego.lane = d_to_lane(sd[1]);
+                        ego.s    = sd[0];
+                    }
 
                     // Generate predictions for each vehicle in our sensor fusion data.
                     vector<Vehicle>             traffic;
@@ -233,8 +240,8 @@ int main() {
                     // Add predictions for the ego vehicle.
                     predictions[-1] = ego.generate_predictions();
 
-                    //// Calculate a trajectory for the ego vehicle based on predictions.
-                    //vector<Vehicle> trajectory = ego.choose_next_state(predictions);
+                    // Calculate a trajectory for the ego vehicle based on predictions.
+                    vector<Vehicle> trajectory = ego.choose_next_state(predictions);
 
                     //// grab the current ego position to use as starting point
                     //ego.realize_next_state(trajectory);
@@ -243,6 +250,7 @@ int main() {
                     //StraightLineTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
                     //CircleTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
 
+                    // Update the 'ego' vehicle (lane, velocity) and generate a path (next_x_vals, next_y_vals).
                     PathPlannerTrajectory(
                         ego, traffic,
                         map_waypoints_x, map_waypoints_y, map_waypoints_s,
@@ -281,14 +289,11 @@ int main() {
         std::cout << "Connected!!!" << std::endl;
 
         // Initialize the ego vehicle object.
+        ego = Vehicle(-1, 0.0, 0.0, 0.0, "KL"); // (lane, s) are initialized in the first iteration.
+
         double  goal_s    = 0.0;
-        double  goal_lane = 2.0;
+        double  goal_lane = 1.0;    // Stay in the middle lane (0 == left lane, 1 == middle lane, 2 == right lane)
         vector<double>  ego_config = {SPEED_LIMIT, (double) LANE_COUNT, goal_s, goal_lane, MAX_ACCELERATION};
-        int     lane = 1;       // Initial lane (1 == middle lane).
-        double  s, v, a;        // Initial 's' position and velocity, acceleration.
-        s = 0.0; v = 0.0; a = 0.0;
-        string  state = "KL";   // Keep Lane
-        ego = Vehicle(lane, s, v, a, "KL");
         ego.configure(ego_config);
     });
 
@@ -480,10 +485,10 @@ void PathPlannerTrajectory(
     // Add waypoints for the current car position (s) at PATH_STEP increments,
     // staying in the same lane. This will ensure that our spline actually
     // follows the road.
-    double  lane_d = lane_to_d(ego.lane);
-    vector<double> next_wp0 = getXY(ego.s + PATH_STEP    , lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    vector<double> next_wp1 = getXY(ego.s + PATH_STEP * 2, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-    vector<double> next_wp2 = getXY(ego.s + PATH_STEP * 3, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    double  ego_d = lane_to_d(ego.lane);
+    vector<double> next_wp0 = getXY(ego.s + PATH_STEP    , ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    vector<double> next_wp1 = getXY(ego.s + PATH_STEP * 2, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    vector<double> next_wp2 = getXY(ego.s + PATH_STEP * 3, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
 
     path_x.push_back(next_wp0[0]); path_y.push_back(next_wp0[1]);
     path_x.push_back(next_wp1[0]); path_y.push_back(next_wp1[1]);
@@ -518,7 +523,7 @@ void PathPlannerTrajectory(
     // Set the target x position to the current ego position plus one PATH_STEP.
     // The target y position is set using the spline we just created.
     // Recall that the ego vehicle object has already been updated with new trajectory info.
-    vector<double> target = getXY(ego.s + PATH_STEP, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    vector<double> target = getXY(ego.s + PATH_STEP, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
     double  target_x = target[0];
     double  target_y = s(target_x);
     double  target_dist = sqrt(pow(target_x, 2) + pow(target_y, 2));
