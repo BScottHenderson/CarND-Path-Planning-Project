@@ -11,8 +11,11 @@ constexpr auto HALF_LANE_WIDTH              = LANE_WIDTH / 2.0;
 // Speed limit in meters/second (50 mph ~= 22.353 m/s).
 constexpr auto SPEED_LIMIT                  = 22.25;
 
-// Max acceleration in meters/second/second (0.1 m/s/s ~ 0.326 ft/s/s). 
-constexpr auto MAX_ACCELERATION             = 0.1;
+// Max acceleration in meters/second/second.
+constexpr auto MAX_ACCELERATION             = 0.075;
+
+// Number of time steps for predictions.
+constexpr auto PREDICTION_HORIZON           = 5;
 
 // Preferred buffer distance (meters) between the ego vehicle and other vehicles.
 constexpr auto PREFERRED_BUFFER_FRONT       = 6.0;      // Distance to a vehicle in front.
@@ -21,6 +24,10 @@ constexpr auto PREFERRED_BUFFER_LANE_CHANGE = 30.0;     // Distance to any vehic
 // Distance (meters) along the path for the next point.
 constexpr auto PATH_STEP                    = 30.0;
 
+// Number of waypoints to add to the list of path points before using
+// spline to smooth the trajectory.
+constexpr auto WAYPOINTS_TO_ADD             = 5;
+
 // Number of points in a path for each iteration. (50 points at 20ms per point == 1s)
 constexpr auto PATH_LENGTH                  = 50;
 
@@ -28,6 +35,6 @@ constexpr auto PATH_LENGTH                  = 50;
 // Use a larger number to maintain a smoother trajectory.
 // Use a smaller value to allow the ego vehicle to repond more quickly
 // to changing conditions.
-constexpr auto PREVIOUS_POINTS_TO_KEEP      = 35;
+constexpr auto PREVIOUS_POINTS_TO_KEEP      = 20;
 
 #endif CONSTANTS_H
