@@ -19,6 +19,7 @@ Vehicle::Vehicle(int lane, double s, double v, double a, string state) {
     this->a     = a;
     this->state = state;
     max_acceleration = -1;
+    time_step        = 1.0;
 }
 
 Vehicle::~Vehicle() {}
@@ -196,7 +197,7 @@ vector<double> Vehicle::get_kinematics(map<int, vector<Vehicle>> &predictions,
 
 vector<Vehicle> Vehicle::constant_speed_trajectory() {
     // Generate a constant speed trajectory.
-    double  next_pos = position_at(1);
+    double  next_pos = position_at(time_step);
     vector<Vehicle> trajectory = {Vehicle(this->lane, this->s,  this->v, this->a, this->state), 
                                   Vehicle(this->lane, next_pos, this->v,       0, this->state)};
     return trajectory;
@@ -274,11 +275,11 @@ vector<Vehicle> Vehicle::lane_change_trajectory(string state,
     return trajectory;
 }
 
-void Vehicle::increment(int dt = 1) {
+void Vehicle::increment(double dt = 1) {
     this->s = position_at(dt);
 }
 
-double Vehicle::position_at(int t) {
+double Vehicle::position_at(double t) {
     return (double) (this->s + this->v*t + 0.5*this->a*t*t);
 }
 
@@ -329,10 +330,10 @@ vector<Vehicle> Vehicle::generate_predictions(int horizon) {
     //   generation for the ego vehicle.
     vector<Vehicle> predictions;
     for (int i = 0; i < horizon; ++i) {
-        double  next_s = position_at(i);
+        double  next_s = position_at(i * time_step);
         double  next_v = 0;
         if (i < horizon - 1)
-            next_v = position_at(i + 1) - this->s;
+            next_v = position_at((i + 1) * time_step) - this->s;
         predictions.push_back(Vehicle(this->lane, next_s, next_v, 0));
             //                        ^^^^^^^^^^
             // Assume we're staying in the same lane.
@@ -345,7 +346,9 @@ void Vehicle::realize_next_state(vector<Vehicle> &trajectory) {
     // Sets state and kinematics for ego vehicle using the last state of the trajectory.
     Vehicle next_state = trajectory[trajectory.size()-1];
     this->lane  = next_state.lane;
-    this->s     = next_state.s;
+    // this->s     = next_state.s;
+    // Do *not* update the 's' position. This value is set via data read
+    // from the simulator.
     this->v     = next_state.v;
     this->a     = next_state.a;
     this->state = next_state.state;
@@ -354,10 +357,11 @@ void Vehicle::realize_next_state(vector<Vehicle> &trajectory) {
 void Vehicle::configure(vector<double> &road_data) {
     // Called by simulator before simulation begins. Sets various parameters which
     //   will impact the ego vehicle.
-    assert(road_data.size() == 5);
+    assert(road_data.size() == 6);
     target_speed     =       road_data[0];
     lanes_available  = (int) road_data[1];
     goal_s           =       road_data[2];
     goal_lane        = (int) road_data[3];
     max_acceleration =       road_data[4];
+    time_step        =       road_data[5];
 }
