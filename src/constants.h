@@ -28,10 +28,14 @@ constexpr auto PATH_STEP                    = 30.0;
 
 // Number of waypoints to add to the list of path points before using
 // spline to smooth the trajectory.
-constexpr auto WAYPOINTS_TO_ADD             = 5;
+constexpr auto WAYPOINTS_TO_ADD             = 3;
 
-// Number of points in a path for each iteration. (50 points at 20ms per point == 1s)
-constexpr auto PATH_LENGTH                  = 50;
+// Interval at which vehicle updates occur.
+constexpr auto UPDATE_INTERVAL              = 0.02;     // Update interval in seconds (20ms == 0.02s).
+
+// Number of points in a path for 1 second.
+// With a 0.02s update interval this value should be 50.
+constexpr auto PATH_LENGTH                  = 1.0 / UPDATE_INTERVAL;
 
 // Number of points to keep from the previous path for each iteration.
 // Use a larger number to maintain a smoother trajectory.
