@@ -1,3 +1,4 @@
+
 #include "cost.h"
 #include <cmath>
 #include <functional>
@@ -5,13 +6,14 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <iostream>
 #include "vehicle.h"
 
 using std::string;
 using std::vector;
 
 /**
- * TODO: change weights for cost functions.
+ * Weights for cost functions.
  */
 const double REACH_GOAL = 0.90F;
 const double EFFICIENCY = 0.10F;
@@ -23,9 +25,9 @@ const double EFFICIENCY = 0.10F;
 //   for details on how the helper data is computed.
 
 double goal_distance_cost(const Vehicle &vehicle, 
-                         const vector<Vehicle> &trajectory, 
-                         const map<int, vector<Vehicle>> &predictions, 
-                         map<string, double> &data) {
+                          const vector<Vehicle> &trajectory, 
+                          const map<int, vector<Vehicle>> &predictions, 
+                          map<string, double> &data) {
     // Cost increases based on distance of intended lane (for planning a lane 
     //   change) and final lane of trajectory.
     // Cost of being out of goal lane also becomes larger as vehicle approaches 
@@ -33,6 +35,7 @@ double goal_distance_cost(const Vehicle &vehicle,
     // This function is very similar to what you have already implemented in the 
     //   "Implement a Cost Function in C++" quiz.
     double cost;
+
     double distance = data["distance_to_goal"];
     if (distance > 0) {
         int delta = (vehicle.goal_lane - (int) data["intended_lane"])
@@ -46,9 +49,9 @@ double goal_distance_cost(const Vehicle &vehicle,
 }
 
 double inefficiency_cost(const Vehicle &vehicle, 
-                        const vector<Vehicle> &trajectory, 
-                        const map<int, vector<Vehicle>> &predictions, 
-                        map<string, double> &data) {
+                         const vector<Vehicle> &trajectory, 
+                         const map<int, vector<Vehicle>> &predictions, 
+                         map<string, double> &data) {
     // Cost becomes higher for trajectories with intended lane and final lane 
     //   that have traffic slower than vehicle's target speed.
     // You can use the lane_speed function to determine the speed for a lane. 
@@ -61,7 +64,7 @@ double inefficiency_cost(const Vehicle &vehicle,
     double proposed_speed_final = lane_speed(predictions, (int) data["final_lane"]);
     if (proposed_speed_final < 0)
         proposed_speed_final = vehicle.target_speed;
-    
+
     double   delta = (vehicle.target_speed - proposed_speed_intended)
                     + (vehicle.target_speed - proposed_speed_final);
     double   cost = delta / vehicle.target_speed;
@@ -123,9 +126,9 @@ map<string, double> get_helper_data(const Vehicle &vehicle,
 
     int                 intended_lane;
     if (trajectory_last.state.compare("PLCL") == 0) {
-        intended_lane = trajectory_last.lane + 1;
-    } else if (trajectory_last.state.compare("PLCR") == 0) {
         intended_lane = trajectory_last.lane - 1;
+    } else if (trajectory_last.state.compare("PLCR") == 0) {
+        intended_lane = trajectory_last.lane + 1;
     } else {
         intended_lane = trajectory_last.lane;
     }
