@@ -21,6 +21,8 @@
 #include "trajectory.h"
 #include "vehicle.h"
 
+#define USE_VEHICLE_CLASS_PLANNING  1
+
 // for convenience
 using nlohmann::json;
 using std::string;
@@ -155,6 +157,8 @@ int main() {
                             (2.0 m to get to the middle of the left lane, 8.0 m to move over two lanes)
                     */
 
+                    std::cout << std::endl << "current state: " << ego.state << std::endl;
+
                     // Update the ego vehicle based on new information from the controller.
                     if (previous_path_x.size() == 0) {
                         ego.lane = d_to_lane(car_d);
@@ -173,8 +177,11 @@ int main() {
                     }
 
                     // Generate predictions for each vehicle in our sensor fusion data.
-                    vector<Vehicle>             traffic;
+#if USE_VEHICLE_CLASS_PLANNING
                     map<int, vector<Vehicle>>   predictions;
+#else
+                    vector<Vehicle>             traffic;
+#endif USE_VEHICLE_CLASS_PLANNING
                     for (auto car : sensor_fusion) {
                         // The data format for each car is: [id, x, y, vx, vy, s, d].
                         int     id   = car[0];
@@ -190,22 +197,34 @@ int main() {
                         double  v    = sqrt(vx * vx + vy * vy);
 
                         Vehicle car  = Vehicle(lane, s, v, 0.0, "CS");
-
-                        traffic.push_back(car);
+#if USE_VEHICLE_CLASS_PLANNING
                         predictions[id] = car.generate_predictions(PREDICTION_HORIZON);
+#else
+                        traffic.push_back(car);
+#endif USE_VEHICLE_CLASS_PLANNING
                     }
 
+#if USE_VEHICLE_CLASS_PLANNING
                     // Add predictions for the ego vehicle.
                     predictions[-1] = ego.generate_predictions(PREDICTION_HORIZON);
+
+                    std::cout << "predictions:" << std::endl;
+                    for (auto pred : predictions) {
+                        std::cout << "id: " << std::setw(2) << pred.first;
+                        for (auto car : pred.second) {
+                            std::cout << " " << car.to_string();
+                        }
+                    }
 
                     // Calculate a trajectory for the ego vehicle based on predictions.
                     vector<Vehicle> trajectory = ego.choose_next_state(predictions);
 
                     // Update the ego vehicle state using the calculated trajectory.
-                    //ego.realize_next_state(trajectory);
-
+                    ego.realize_next_state(trajectory);
+#else
                     // Update the ego vehicle state.
                     UpdateEgo(ego, traffic, previous_path_x, previous_path_y);
+#endif USE_VEHICLE_CLASS_PLANNING
 
                     // Generate a trajectory using the update ego information.
                     PathPlannerTrajectory(
@@ -249,11 +268,16 @@ int main() {
         std::cout << "Connected!!!" << std::endl;
 
         // Initialize the ego vehicle object.
-        ego = Vehicle(-1, 0.0, 0.0, 0.0, "KL"); // (lane, s) are initialized in the first iteration.
-                                                // KL == Keep Lane
+        int     lane = -1;              // (lane, s) are initialized in the first
+        double  s = 0.0;                //    iteration.
+        double  v = 0.0;                // Initial velocity.
+        double  a = MAX_ACCELERATION;   // Initial acceleratoin.
+        string  state = "CS";           // Initial state: Constant Speed
+        ego = Vehicle(lane, s, v, a, state);
 
-        double  goal_s    = 0.0;
-        double  goal_lane = 1.0;    // Stay in the middle lane (0 == left lane, 1 == middle lane, 2 == right lane)
+        //double  goal_s    = MAX_S;      // One lap.
+        double goal_s = 0;
+        double  goal_lane = MAX_LANE;   // Stay in rightmost lane.
         vector<double>  ego_config =
             {SPEED_LIMIT, (double) LANE_COUNT, goal_s, goal_lane, MAX_ACCELERATION, UPDATE_INTERVAL};
         ego.configure(ego_config);
