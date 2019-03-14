@@ -44,10 +44,7 @@ double  lane_to_d(int lane) {
     return lane * LANE_WIDTH + HALF_LANE_WIDTH;
 }
 int     d_to_lane(double d) {
-    int     lane = (int) round((d - HALF_LANE_WIDTH) / LANE_WIDTH);
-    if (lane >= LANE_COUNT)
-        lane = -1;
-    return lane;
+    return (int) round((d - HALF_LANE_WIDTH) / LANE_WIDTH);
 }
 
 // Calculate closest waypoint to current x, y position
