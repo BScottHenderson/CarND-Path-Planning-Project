@@ -156,21 +156,21 @@ int main() {
                         (waypoint_dx, waypoint_dy) = Frenet d unit normal vector pointing perpendicular to the road towards the right lane
 
                         left_lane_x = waypoint_x + (waypoint_dx * 2.0)
-                        left_lane_y = waypoint_y + (waypoint_dx * 2.0)
+                        left_lane_y = waypoint_y + (waypoint_dy * 2.0)
                             multiply by 2.0 to get to the middle of the left lane since the lanes are 4.0 m wide
 
                         middle_lane_x = waypoint_x + (waypoint_dx * 6.0)
-                        middle_lane_y = waypoint_y + (waypoint_dx * 6.0)
+                        middle_lane_y = waypoint_y + (waypoint_dy * 6.0)
                             multiply by 6.0 to get to the middle of the middle lane
-                            2.0 m to get to the middle of the left lane + 4.0 m to get to the next lane
+                            (2.0 m to get to the middle of the left lane, 4.0 m to get to the next lane)
 
                         right_lane_x = waypoint_x + (waypoint_dx * 10.0)
-                        right_lane_y = waypoint_y + (waypoint_dx * 10.0)
+                        right_lane_y = waypoint_y + (waypoint_dy * 10.0)
                             multiply by 10.0 to get to the middle of the right lane
-                            2.0 m to get to the middle of the left lane + 8.0 m to move over two lanes
+                            (2.0 m to get to the middle of the left lane, 8.0 m to move over two lanes)
                     */
 
-                    // Update the ego vehicle.
+                    // Update the ego vehicle based on new information from the controller.
                     if (previous_path_x.size() == 0) {
                         ego.lane = d_to_lane(car_d);
                         ego.s    = car_s;
@@ -200,7 +200,7 @@ int main() {
                         double  vy   = car[4];
 
                         int     lane = d_to_lane(d);
-                        if (lane < 0)
+                        if (lane < 0 || MAX_LANE < lane)
                             continue;
                         double  v    = sqrt(vx * vx + vy * vy);
 
@@ -269,7 +269,8 @@ int main() {
 
         double  goal_s    = 0.0;
         double  goal_lane = 1.0;    // Stay in the middle lane (0 == left lane, 1 == middle lane, 2 == right lane)
-        vector<double>  ego_config = {SPEED_LIMIT, (double) LANE_COUNT, goal_s, goal_lane, MAX_ACCELERATION};
+        vector<double>  ego_config =
+            {SPEED_LIMIT, (double) LANE_COUNT, goal_s, goal_lane, MAX_ACCELERATION, UPDATE_INTERVAL};
         ego.configure(ego_config);
     });
 
@@ -387,9 +388,11 @@ void UpdateEgo(
             // We're boxed in so just slow down.
             ego.v -= MAX_ACCELERATION;
     } else {
-        // Stay in the center lane if possible.
-        if (ego.lane != 1 && ((ego.lane == MAX_LANE && !car_left) || (ego.lane == 0 && !car_right)))
-            ego.lane = 1;
+        // Stay in the center lane (lane 1) if possible.
+        if (ego.lane == 0 && !car_right)
+            ego.lane++;
+        else if (ego.lane > 1 && !car_left)
+            ego.lane--;
 
         // If there is no car ahead and we're still below the speed limit, speed up!
         if (ego.v < SPEED_LIMIT)
@@ -412,6 +415,13 @@ void PathPlannerTrajectory(
         next_x_vals.push_back(previous_path_x[i]);
         next_y_vals.push_back(previous_path_y[i]);
     }
+
+
+    // Calculate the duration for each path (this should always be 1.0s).
+    double  t = PATH_LENGTH * UPDATE_INTERVAL;
+
+    // Distance traveled for each interval.
+    double  path_s = (ego.v > 0.0) ? ego.v * t : PATH_STEP;
 
 
     // Collect points for the path we want to follow.
@@ -443,10 +453,11 @@ void PathPlannerTrajectory(
         //prev_x = start_x - cos(car_yaw);
         //prev_y = start_y - sin(car_yaw);
 
-        // Rather than using the bicycle model to calculate a hypothetical
-        // previous car position, just backup by one PATH_STEP in the same
-        // lane - this removes the need to know 'car_yaw'.
-        xy = getXY(ego.s - PATH_STEP, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+        // Rather than using the bicycle model to calculate a hypothetical previous
+        // car position, just backup by one path step interval in the same lane -
+        // this removes the need to know 'car_yaw' and should prevent backing up
+        // out of the current lane.
+        xy = getXY(ego.s - path_s, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
         prev_x = xy[0];
         prev_y = xy[1];
     } else {
@@ -501,7 +512,7 @@ void PathPlannerTrajectory(
     // Set the target x position to the current ego position plus one PATH_STEP.
     // The target y position is set using the spline we just created.
     // Recall that the ego vehicle object has already been updated with new trajectory info.
-    vector<double> target = getXY(ego.s + PATH_STEP, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+    vector<double> target = getXY(ego.s + path_s, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
     double  target_x = target[0];
     double  target_y = s(target_x);
     double  target_dist = sqrt(pow(target_x, 2) + pow(target_y, 2));
