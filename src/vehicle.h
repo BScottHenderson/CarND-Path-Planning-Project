@@ -32,8 +32,8 @@ public:
     vector<Vehicle>     prep_lane_change_trajectory(string state,
                                                     map<int, vector<Vehicle>> &predictions);
 
-    void                increment(int dt);
-    double              position_at(int t);
+    void                increment(double dt);
+    double              position_at(double t);
 
     bool                get_vehicle_behind(map<int, vector<Vehicle>> &predictions,
                                            int lane, Vehicle &rVehicle);
@@ -58,6 +58,7 @@ public:
     double      s, goal_s;
     double      v, target_speed;
     double      a, max_acceleration;
+    double      time_step;
     string      state;
 
     vector<Vehicle> traffic;
