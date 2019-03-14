@@ -1,3 +1,4 @@
+
 #include "vehicle.h"
 #include <string>
 #include <vector>
@@ -5,6 +6,9 @@
 #include <assert.h>
 #include <algorithm>
 #include <iterator>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
 #include "constants.h"
 #include "helpers.h"
 #include "cost.h"
@@ -23,6 +27,17 @@ Vehicle::Vehicle(int lane, double s, double v, double a, string state) {
 }
 
 Vehicle::~Vehicle() {}
+
+string Vehicle::to_string(void) {
+    // Write the current Vehicle to a string.
+    std::stringstream   ss;
+    ss << "(lane, v, a, state) = ("
+       << this->lane << ", "
+       << this->v << ", "
+       << this->a << ", "
+       << this->state << ")";
+    return ss.str();
+}
 
 vector<Vehicle> Vehicle::choose_next_state(map<int, vector<Vehicle>> &predictions) {
     /**
@@ -89,14 +104,24 @@ vector<Vehicle> Vehicle::choose_next_state(map<int, vector<Vehicle>> &prediction
     // For each state that is a possible successor to the current state ...
     vector<string>  states = this->successor_states();
     for (auto state : states) {
+        std::cout << "new state: " << state << std::endl;
+
         // Generate a rough idea of the trajectory we would follow if we chose this state.
         vector<Vehicle> trajectory_for_state = generate_trajectory(state, predictions);
+
+        // If we were unable to generate a trajectory for the proposed successor state,
+        // then skip it (an example would be an attempt to generate a lane change
+        // trajectory when there is a vehicle in the new lane).
+        if (trajectory_for_state.size() == 0)
+            continue;
 
         // Calculate the cost associated with the trajectory.
         double  cost_for_state = calculate_cost(*this, predictions, trajectory_for_state);
 
         // Save the cost so we can determine the min cost trajectory.
         costs.push_back({cost_for_state, trajectory_for_state});
+
+        std::cout << "cost = " << cost_for_state << std::endl;
     }
 
     vector<Vehicle> min_cost_trajectory;
@@ -122,22 +147,22 @@ vector<string> Vehicle::successor_states() {
 
     // If we're in Keep Lanes then we can Prepare for a Lane Change [Left|Right].
     if (this->state.compare("KL") == 0) {
-        states.push_back("PLCL");
-        states.push_back("PLCR");
+        // Can't go left if we're already in the left lane.
+        if (this->lane > 0)
+            states.push_back("PLCL");
+        // Can't go right if we're already in the right lane.
+        if (this->lane < lanes_available - 1)
+            states.push_back("PLCR");
 
     // If we're in Prepare Lane Change Left then we can stay there or Lane Change Left.
     } else if (this->state.compare("PLCL") == 0) {
-        if (this->lane != lanes_available - 1) {
-            states.push_back("PLCL");
-            states.push_back("LCL");
-        }
+        states.push_back("PLCL");
+        states.push_back("LCL");
 
     // If we're in Prepare Lane Change right then we can stay there or Lane Change Right.
     } else if (this->state.compare("PLCR") == 0) {
-        if (this->lane != 0) {
-            states.push_back("PLCR");
-            states.push_back("LCR");
-        }
+        states.push_back("PLCR");
+        states.push_back("LCR");
     }
     
     // If state is "LCL" or "LCR", then just return "KL"
@@ -159,6 +184,9 @@ vector<Vehicle> Vehicle::generate_trajectory(string state,
         trajectory = prep_lane_change_trajectory(state, predictions);
     }
 
+    std::cout << "next state for " << std::setw(4) << state
+              << " : " << next_state_to_string(trajectory) << std::endl;
+
     return trajectory;
 }
 
@@ -178,6 +206,7 @@ vector<double> Vehicle::get_kinematics(map<int, vector<Vehicle>> &predictions,
         if (get_vehicle_behind(predictions, lane, vehicle_behind)) {
             // Must travel at the speed of traffic, regardless of preferred buffer.
             new_velocity = vehicle_ahead.v;
+std::cout << "traffic speed: " << vehicle_ahead.v << std::endl;
         } else {
             double  max_velocity_in_front =
                 (vehicle_ahead.s - this->s - PREFERRED_BUFFER_FRONT)
@@ -207,10 +236,7 @@ vector<Vehicle> Vehicle::keep_lane_trajectory(map<int, vector<Vehicle>> &predict
     // Generate a keep lane trajectory.
     vector<Vehicle> trajectory = {Vehicle(this->lane, this->s, this->v, this->a, state)};
     vector<double>  kinematics = get_kinematics(predictions, this->lane);
-    double          new_s = kinematics[0];
-    double          new_v = kinematics[1];
-    double          new_a = kinematics[2];
-    trajectory.push_back(Vehicle(this->lane, new_s, new_v, new_a, "KL"));
+    trajectory.push_back(Vehicle(this->lane, kinematics[0], kinematics[1], kinematics[2], "KL"));
         // Keep Lane trajectory  ^^^^^^^^^^
     return trajectory;
 }
@@ -267,7 +293,6 @@ vector<Vehicle> Vehicle::lane_change_trajectory(string state,
     }
 
     trajectory.push_back(Vehicle(this->lane, this->s, this->v, this->a, this->state));
-
     vector<double>  kinematics = get_kinematics(predictions, new_lane);
     trajectory.push_back(Vehicle(new_lane, kinematics[0], kinematics[1], kinematics[2], state));
         // Lane Change trajectory^^^^^^^^
@@ -344,7 +369,9 @@ vector<Vehicle> Vehicle::generate_predictions(int horizon) {
 
 void Vehicle::realize_next_state(vector<Vehicle> &trajectory) {
     // Sets state and kinematics for ego vehicle using the last state of the trajectory.
-    Vehicle next_state = trajectory[trajectory.size()-1];
+    if (trajectory.size() == 0)
+        return;
+    Vehicle next_state = trajectory[1];
     this->lane  = next_state.lane;
     // this->s     = next_state.s;
     // Do *not* update the 's' position. This value is set via data read
@@ -352,6 +379,14 @@ void Vehicle::realize_next_state(vector<Vehicle> &trajectory) {
     this->v     = next_state.v;
     this->a     = next_state.a;
     this->state = next_state.state;
+}
+
+string Vehicle::next_state_to_string(vector<Vehicle> &trajectory) {
+    // Write the next state to a string.
+    if (trajectory.size() == 0)
+        return "";
+    Vehicle next_state = trajectory[1];
+    return next_state.to_string();
 }
 
 void Vehicle::configure(vector<double> &road_data) {
