@@ -19,6 +19,8 @@ public:
     virtual ~Vehicle();
 
     // Vehicle functions
+    string              to_string(void);
+
     vector<Vehicle>     choose_next_state(map<int, vector<Vehicle>> &predictions);
     vector<string>      successor_states();
     vector<Vehicle>     generate_trajectory(string state,
@@ -43,6 +45,7 @@ public:
     vector<Vehicle>     generate_predictions(int horizon = 2);
 
     void                realize_next_state(vector<Vehicle> &trajectory);
+    string              next_state_to_string(vector<Vehicle> &trajectory);
 
     void                configure(vector<double> &road_data);
 
@@ -52,7 +55,7 @@ public:
         int     time;       // time collision happens
     };
 
-    map<string, int> lane_direction = {{"PLCL", 1}, {"LCL", 1}, {"LCR", -1}, {"PLCR", -1}};
+    map<string, int> lane_direction = {{"PLCL", -1}, {"LCL", -1}, {"LCR", 1}, {"PLCR", 1}};
 
     int         lane, goal_lane, lanes_available;
     double      s, goal_s;
