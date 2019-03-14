@@ -3,6 +3,8 @@
 
 #define _USE_MATH_DEFINES
 #include <math.h>
+#include <string>
+#include <vector>
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
