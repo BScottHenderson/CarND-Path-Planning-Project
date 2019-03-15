@@ -13,6 +13,8 @@
 #include "helpers.h"
 #include "cost.h"
 
+#define DEBUG_OUTPUT    0
+
 // Initializes Vehicle
 Vehicle::Vehicle(){}
 
@@ -31,10 +33,14 @@ Vehicle::~Vehicle() {}
 string Vehicle::to_string(void) {
     // Write the current Vehicle to a string.
     std::stringstream   ss;
-    ss << "(lane, v, a, state) = ("
+    ss << "(lane, s, v, a, state) = ("
        << this->lane << ", "
+       << std::fixed << std::setw(8) << std::setprecision(3)
+       << this->s << ", "
+       << std::fixed << std::setw(6) << std::setprecision(3)
        << this->v << ", "
        << this->a << ", "
+       << std::setw(4)
        << this->state << ")";
     return ss.str();
 }
@@ -104,8 +110,9 @@ vector<Vehicle> Vehicle::choose_next_state(map<int, vector<Vehicle>> &prediction
     // For each state that is a possible successor to the current state ...
     vector<string>  states = this->successor_states();
     for (auto state : states) {
+#if DEBUG_OUTPUT
         std::cout << "new state: " << state << std::endl;
-
+#endif
         // Generate a rough idea of the trajectory we would follow if we chose this state.
         vector<Vehicle> trajectory_for_state = generate_trajectory(state, predictions);
 
@@ -120,8 +127,9 @@ vector<Vehicle> Vehicle::choose_next_state(map<int, vector<Vehicle>> &prediction
 
         // Save the cost so we can determine the min cost trajectory.
         costs.push_back({cost_for_state, trajectory_for_state});
-
+#if DEBUG_OUTPUT
         std::cout << "cost = " << cost_for_state << std::endl;
+#endif
     }
 
     vector<Vehicle> min_cost_trajectory;
@@ -184,8 +192,10 @@ vector<Vehicle> Vehicle::generate_trajectory(string state,
         trajectory = prep_lane_change_trajectory(state, predictions);
     }
 
+#if DEBUG_OUTPUT
     std::cout << "next state for " << std::setw(4) << state
               << " : " << next_state_to_string(trajectory) << std::endl;
+#endif
 
     return trajectory;
 }
@@ -203,11 +213,21 @@ vector<double> Vehicle::get_kinematics(map<int, vector<Vehicle>> &predictions,
     Vehicle vehicle_behind;
 
     if (get_vehicle_ahead(predictions, lane, vehicle_ahead)) {
+        /*
         if (get_vehicle_behind(predictions, lane, vehicle_behind)) {
             // Must travel at the speed of traffic, regardless of preferred buffer.
             new_velocity = vehicle_ahead.v;
-std::cout << "traffic speed: " << vehicle_ahead.v << std::endl;
-        } else {
+        } else
+
+            Don't worry about vehicles behind. If there is a vehicle ahead we'll speed
+            up as much as we can - without exceeding max acceleration - to avoid collision
+            with the vehicle in front.
+
+            Don't just arbitrarily set our speed to the speed of the vehicle in front
+            (to avoid potential collision with the vehicle behind) because this will
+            likely lead to excessive acceleration and/or jerk.
+        */
+        {
             double  max_velocity_in_front =
                 (vehicle_ahead.s - this->s - PREFERRED_BUFFER_FRONT)
                 + vehicle_ahead.v - 0.5 * this->a;
@@ -358,7 +378,8 @@ vector<Vehicle> Vehicle::generate_predictions(int horizon) {
         double  next_s = position_at(i * time_step);
         double  next_v = 0;
         if (i < horizon - 1)
-            next_v = position_at((i + 1) * time_step) - this->s;
+            //next_v = position_at((i + 1) * time_step) - this->s;
+            next_v = position_at((i + 1) * time_step) - next_s;
         predictions.push_back(Vehicle(this->lane, next_s, next_v, 0));
             //                        ^^^^^^^^^^
             // Assume we're staying in the same lane.
@@ -384,7 +405,7 @@ void Vehicle::realize_next_state(vector<Vehicle> &trajectory) {
 string Vehicle::next_state_to_string(vector<Vehicle> &trajectory) {
     // Write the next state to a string.
     if (trajectory.size() == 0)
-        return "";
+        return "empty trajectory";
     Vehicle next_state = trajectory[1];
     return next_state.to_string();
 }
