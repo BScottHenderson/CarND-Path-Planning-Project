@@ -17,6 +17,7 @@
     <ClInclude Include="..\..\src\JMT.h" />
     <ClInclude Include="..\..\src\json.hpp" />
     <ClInclude Include="..\..\src\spline.h" />
+    <ClInclude Include="..\..\src\trajectory.h" />
     <ClInclude Include="..\..\src\vehicle.h" />
   </ItemGroup>
   <ItemGroup>
@@ -24,6 +25,7 @@
     <ClCompile Include="..\..\src\helpers.cpp" />
     <ClCompile Include="..\..\src\JMT.cpp" />
     <ClCompile Include="..\..\src\main.cpp" />
+    <ClCompile Include="..\..\src\trajectory.cpp" />
     <ClCompile Include="..\..\src\vehicle.cpp" />
   </ItemGroup>
   <ItemGroup>
