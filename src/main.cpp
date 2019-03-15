@@ -21,6 +21,7 @@
 #include "trajectory.h"
 #include "vehicle.h"
 
+#define DEBUG_OUTPUT                0
 #define USE_VEHICLE_CLASS_PLANNING  1
 
 // for convenience
@@ -157,7 +158,12 @@ int main() {
                             (2.0 m to get to the middle of the left lane, 8.0 m to move over two lanes)
                     */
 
-                    std::cout << std::endl << "current state: " << ego.state << std::endl;
+#if DEBUG_OUTPUT
+                    std::cout << std::endl
+                              << "------------------------------------------------------------"
+                              << std::endl;
+                    std::cout << "current state: " << ego.state << std::endl;
+#endif
 
                     // Update the ego vehicle based on new information from the controller.
                     if (previous_path_x.size() == 0) {
@@ -176,6 +182,16 @@ int main() {
                         ego.s    = sd[0];
                     }
 
+
+                    // Set the prediction horizon based on the speed of the ego vehicle.
+                    // For slower speeds we need a longer prediction horizon to avoid colliding
+                    // with faster-moving vehicles in other lanes during a lane change operation.
+                    // Just use a linear function based on ego vehicle velocity.
+                    int prediction_horizon =
+                        (int) (MAX_PREDICTION_HORIZON - PREDICTION_HORIZON_SLOPE * ego.v);
+#if DEBUG_OUTPUT
+                    std::cout << "prediction horizon: " << prediction_horizon << std::endl;
+#endif
                     // Generate predictions for each vehicle in our sensor fusion data.
 #if USE_VEHICLE_CLASS_PLANNING
                     map<int, vector<Vehicle>>   predictions;
@@ -198,7 +214,7 @@ int main() {
 
                         Vehicle car  = Vehicle(lane, s, v, 0.0, "CS");
 #if USE_VEHICLE_CLASS_PLANNING
-                        predictions[id] = car.generate_predictions(PREDICTION_HORIZON);
+                        predictions[id] = car.generate_predictions(prediction_horizon);
 #else
                         traffic.push_back(car);
 #endif USE_VEHICLE_CLASS_PLANNING
@@ -206,15 +222,18 @@ int main() {
 
 #if USE_VEHICLE_CLASS_PLANNING
                     // Add predictions for the ego vehicle.
-                    predictions[-1] = ego.generate_predictions(PREDICTION_HORIZON);
+                    predictions[-1] = ego.generate_predictions(prediction_horizon);
 
+#if DEBUG_OUTPUT
                     std::cout << "predictions:" << std::endl;
                     for (auto pred : predictions) {
                         std::cout << "id: " << std::setw(2) << pred.first;
                         for (auto car : pred.second) {
-                            std::cout << " " << car.to_string();
+                            std::cout << " | " << car.to_string();
                         }
+                        std::cout << std::endl;
                     }
+#endif
 
                     // Calculate a trajectory for the ego vehicle based on predictions.
                     vector<Vehicle> trajectory = ego.choose_next_state(predictions);
