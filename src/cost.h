@@ -21,7 +21,18 @@ double inefficiency_cost(const Vehicle &vehicle,
                         const map<int, vector<Vehicle>> &predictions, 
                         map<string, double> &data);
 
+double goal_lane_cost(const Vehicle &vehicle, 
+                      const vector<Vehicle> &trajectory, 
+                      const map<int, vector<Vehicle>> &predictions, 
+                      map<string, double> &data);
+
+double collision_cost(const Vehicle &vehicle, 
+                      const vector<Vehicle> &trajectory, 
+                      const map<int, vector<Vehicle>> &predictions, 
+                      map<string, double> &data);
+
 double lane_speed(const map<int, vector<Vehicle>> &predictions, int lane);
+double lane_speed_closest(const map<int, vector<Vehicle>> &predictions, int lane, double s);
 
 map<string, double> get_helper_data(const Vehicle &vehicle, 
                                    const vector<Vehicle> &trajectory, 
