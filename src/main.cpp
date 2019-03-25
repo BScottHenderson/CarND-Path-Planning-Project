@@ -37,10 +37,10 @@ int main(int argc, char *argv[]) {
         if (argv[i][0] != '-') {
             log_file_name = argv[i];
         }
-        else if (0 == _strcmpi(argv[i], "-html")) {
+        else if (0 == strcmp(argv[i], "-html")) {
             html = true;
         }
-        else if (0 == _strcmpi(argv[i], "-debug")) {
+        else if (0 == strcmp(argv[i], "-debug")) {
             if (i + 1 < argc) {
                 debug_level = atoi(argv[i + 1]);
             }
@@ -253,8 +253,8 @@ int main(int argc, char *argv[]) {
                             continue;
                         double  v    = sqrt(vx * vx + vy * vy);
 
-                        Vehicle car  = Vehicle(lane, s, v, 0.0, "CS");
-                        predictions[id] = car.generate_predictions(prediction_horizon);
+                        Vehicle c    = Vehicle(lane, s, v, 0.0, "CS");
+                        predictions[id] = c.generate_predictions(prediction_horizon);
                     }
 
 #if USE_VEHICLE_CLASS_PLANNING
