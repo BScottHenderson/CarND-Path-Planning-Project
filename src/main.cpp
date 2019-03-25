@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     string      log_file_name = "";
     bool        html          = false;
     int         debug_level   = 0;
-    for (int i = 0; i < argc; ++i) {
+    for (int i = 1; i < argc; ++i) {
         if (argv[i][0] != '-') {
             log_file_name = argv[i];
         }
