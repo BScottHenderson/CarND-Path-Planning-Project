@@ -273,7 +273,7 @@ int main(int argc, char *argv[]) {
                         log_file.write_html_details_footer();
                     }
                     log_file.write_html_details_footer();
-#endif WRITE_PREDICTIONS
+#endif // WRITE_PREDICTIONS
 
                     // Calculate a trajectory for the ego vehicle based on predictions.
                     vector<Vehicle> trajectory = ego.choose_next_state(predictions);
@@ -283,7 +283,7 @@ int main(int argc, char *argv[]) {
 #else
                     // Update the ego vehicle state.
                     UpdateEgo(ego, predictions, previous_path_x, previous_path_y);
-#endif USE_VEHICLE_CLASS_PLANNING
+#endif // USE_VEHICLE_CLASS_PLANNING
 
                     // Generate a trajectory using the update ego information.
                     PathPlannerTrajectory(

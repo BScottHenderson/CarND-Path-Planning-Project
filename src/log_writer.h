@@ -33,4 +33,4 @@ public:
     bool            html;
 };
 
-#endif LOG_WRITER_H
+#endif // LOG_WRITER_H

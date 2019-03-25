@@ -38,4 +38,4 @@ map<string, double> get_helper_data(const Vehicle &vehicle,
                                    const vector<Vehicle> &trajectory, 
                                    const map<int, vector<Vehicle>> &predictions);
 
-#endif COST_H
+#endif // COST_H

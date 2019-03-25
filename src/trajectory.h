@@ -21,4 +21,4 @@ void PathPlannerTrajectory(
     std::vector<double>  previous_path_x, std::vector<double>  previous_path_y,
     std::vector<double>& next_x_vals,     std::vector<double>& next_y_vals);
 
-#endif TRAJECTORY_H
+#endif // TRAJECTORY_H

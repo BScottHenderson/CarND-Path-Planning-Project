@@ -66,4 +66,4 @@ public:
     string      state;
 };
 
-#endif VEHICLE_H
+#endif // VEHICLE_H

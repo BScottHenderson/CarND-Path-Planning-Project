@@ -49,4 +49,4 @@ constexpr auto PATH_LENGTH              = (int) (1 / UPDATE_INTERVAL + 1);
 // to changing conditions.
 constexpr auto PREVIOUS_POINTS_TO_KEEP  = 20;
 
-#endif CONSTANTS_H
+#endif // CONSTANTS_H

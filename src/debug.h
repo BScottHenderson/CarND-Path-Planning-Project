@@ -9,4 +9,4 @@
 
 extern LogWriter    log_file;
 
-#endif DEBUG_H
+#endif // DEBUG_H
