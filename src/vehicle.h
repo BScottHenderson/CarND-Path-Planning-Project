@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include "log_writer.h"
 
 using std::string;
 using std::vector;
@@ -63,8 +64,6 @@ public:
     double      a, max_acceleration;
     double      time_step;
     string      state;
-
-    vector<Vehicle> traffic;
 };
 
 #endif VEHICLE_H
