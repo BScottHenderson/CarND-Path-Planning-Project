@@ -1,4 +1,4 @@
-
+#include "debug.h"
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -20,17 +20,41 @@
 #include "JMT.h"
 #include "trajectory.h"
 #include "vehicle.h"
-
-#define DEBUG_OUTPUT                0
-#define USE_VEHICLE_CLASS_PLANNING  1
+#include "log_writer.h"
 
 // for convenience
 using nlohmann::json;
 using std::string;
 using std::vector;
 
-int main() {
-    uWS::Hub h;
+int main(int argc, char *argv[]) {
+
+    // Parse command-line args.
+    string      log_file_name = "";
+    bool        html          = false;
+    int         debug_level   = 0;
+    for (int i = 0; i < argc; ++i) {
+        if (argv[i][0] != '-') {
+            log_file_name = argv[i];
+        }
+        else if (0 == _strcmpi(argv[i], "-html")) {
+            html = true;
+        }
+        else if (0 == _strcmpi(argv[i], "-debug")) {
+            if (i + 1 < argc) {
+                debug_level = atoi(argv[i + 1]);
+            }
+            else {
+                std::cerr << "Invalid debug level (-debug)." << std::endl;
+            }
+        }
+    }
+
+    // Initialize global LogWriter object.
+    log_file.html = html;
+    log_file.open(log_file_name);
+
+    uWS::Hub    h;
 
     // Load up map values for waypoint's x, y, s and d normalized normal vectors.
     vector<double>  map_waypoints_x;
@@ -69,7 +93,22 @@ int main() {
         map_waypoints_dx.push_back(d_x);
         map_waypoints_dy.push_back(d_y);
     }
-    std::wcout << "Read " << map_waypoints_x.size() << " waypoints from '" << map_file_.c_str() << "'." << std::endl;
+
+    std::stringstream   ss;
+    ss << "Read " << map_waypoints_x.size() << " waypoints from '" << map_file_.c_str() << "'.";
+    std::cout << ss.str() << std::endl;
+    log_file.write(ss);
+
+#if USE_VEHICLE_CLASS_PLANNING
+    std::cout << "Using Vehicle class planning." << std::endl;
+#else
+    std::cout << "*NOT* using Vehicle class planning." << std::endl;
+#endif
+
+    auto start = std::chrono::system_clock::now();
+
+    // Track number of iterations for debugging.
+    int     iteration = 0;
 
     // Create the ego Vehicle object here. Initialization occurs in the
     // 'onConnection' message handler. This allows restarting the simulation
@@ -78,10 +117,10 @@ int main() {
     Vehicle ego;
 
 #ifdef _WIN32
-    h.onMessage([&ego,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy]
+    h.onMessage([&start,&iteration,&ego,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy]
                 (uWS::WebSocket<uWS::SERVER>* ws, char *data, size_t length, uWS::OpCode opCode) {
 #else
-    h.onMessage([&ego,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy]
+    h.onMessage([&start,&iteration,&ego,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy]
                 (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
 #endif // _WIN32
         // "42" at the start of the message means there's a websocket message event.
@@ -157,13 +196,19 @@ int main() {
                             multiply by 10.0 to get to the middle of the right lane
                             (2.0 m to get to the middle of the left lane, 8.0 m to move over two lanes)
                     */
-
-#if DEBUG_OUTPUT
-                    std::cout << std::endl
-                              << "------------------------------------------------------------"
-                              << std::endl;
-                    std::cout << "current state: " << ego.state << std::endl;
-#endif
+                    std::stringstream   ss;
+                    log_file.write("------------------------------------------------------------");
+                    ss << "Iteration: " << std::setw(2) << iteration++;
+                    log_file.write_html_details_header(ss);
+                    ss << "Current ego: " << ego.to_string();
+                    log_file.write(ss);
+                    //if (iteration > 100) {
+                    //    auto        end = std::chrono::system_clock::now();
+                    //    std::chrono::duration<double> elapsed_seconds   = end - start;
+                    //    std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+                    //    std::cout << "elapsed time: " << elapsed_seconds.count() << std::endl;
+                    //    throw 0;
+                    //}
 
                     // Update the ego vehicle based on new information from the controller.
                     if (previous_path_x.size() == 0) {
@@ -182,22 +227,18 @@ int main() {
                         ego.s    = sd[0];
                     }
 
-
                     // Set the prediction horizon based on the speed of the ego vehicle.
                     // For slower speeds we need a longer prediction horizon to avoid colliding
                     // with faster-moving vehicles in other lanes during a lane change operation.
                     // Just use a linear function based on ego vehicle velocity.
                     int prediction_horizon =
                         (int) (MAX_PREDICTION_HORIZON - PREDICTION_HORIZON_SLOPE * ego.v);
-#if DEBUG_OUTPUT
-                    std::cout << "prediction horizon: " << prediction_horizon << std::endl;
-#endif
+                    prediction_horizon = 2;
+                    ss << "Prediction Horizon: " << prediction_horizon;
+                    log_file.write(ss);
+
                     // Generate predictions for each vehicle in our sensor fusion data.
-#if USE_VEHICLE_CLASS_PLANNING
                     map<int, vector<Vehicle>>   predictions;
-#else
-                    vector<Vehicle>             traffic;
-#endif USE_VEHICLE_CLASS_PLANNING
                     for (auto car : sensor_fusion) {
                         // The data format for each car is: [id, x, y, vx, vy, s, d].
                         int     id   = car[0];
@@ -213,27 +254,26 @@ int main() {
                         double  v    = sqrt(vx * vx + vy * vy);
 
                         Vehicle car  = Vehicle(lane, s, v, 0.0, "CS");
-#if USE_VEHICLE_CLASS_PLANNING
                         predictions[id] = car.generate_predictions(prediction_horizon);
-#else
-                        traffic.push_back(car);
-#endif USE_VEHICLE_CLASS_PLANNING
                     }
 
 #if USE_VEHICLE_CLASS_PLANNING
                     // Add predictions for the ego vehicle.
                     predictions[-1] = ego.generate_predictions(prediction_horizon);
 
-#if DEBUG_OUTPUT
-                    std::cout << "predictions:" << std::endl;
+#if WRITE_PREDICTIONS
+                    // Write predictions to the log file.
+                    log_file.write_html_details_header("Predictions");
                     for (auto pred : predictions) {
-                        std::cout << "id: " << std::setw(2) << pred.first;
+                        ss << "Id:" << std::setw(2) << pred.first;
+                        log_file.write_html_details_header(ss);
                         for (auto car : pred.second) {
-                            std::cout << " | " << car.to_string();
+                            log_file.write(car.to_string());
                         }
-                        std::cout << std::endl;
+                        log_file.write_html_details_footer();
                     }
-#endif
+                    log_file.write_html_details_footer();
+#endif WRITE_PREDICTIONS
 
                     // Calculate a trajectory for the ego vehicle based on predictions.
                     vector<Vehicle> trajectory = ego.choose_next_state(predictions);
@@ -242,7 +282,7 @@ int main() {
                     ego.realize_next_state(trajectory);
 #else
                     // Update the ego vehicle state.
-                    UpdateEgo(ego, traffic, previous_path_x, previous_path_y);
+                    UpdateEgo(ego, predictions, previous_path_x, previous_path_y);
 #endif USE_VEHICLE_CLASS_PLANNING
 
                     // Generate a trajectory using the update ego information.
@@ -254,6 +294,8 @@ int main() {
 
                     //StraightLineTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
                     //CircleTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
+
+                    log_file.write_html_details_footer();
 
                     // Send path data to the controller.
                     json    msgJson;
@@ -285,6 +327,7 @@ int main() {
     h.onConnection([&h,&ego](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
 #endif // _WIN32
         std::cout << "Connected!!!" << std::endl;
+        log_file.write("Connected!!!");
 
         // Initialize the ego vehicle object.
         int     lane = -1;              // (lane, s) are initialized in the first
@@ -294,8 +337,7 @@ int main() {
         string  state = "CS";           // Initial state: Constant Speed
         ego = Vehicle(lane, s, v, a, state);
 
-        //double  goal_s    = MAX_S;      // One lap.
-        double goal_s = 0;
+        double  goal_s    = MAX_S * 1;  // One lap.
         double  goal_lane = MAX_LANE;   // Stay in rightmost lane.
         vector<double>  ego_config =
             {SPEED_LIMIT, (double) LANE_COUNT, goal_s, goal_lane, MAX_ACCELERATION, UPDATE_INTERVAL};
@@ -310,6 +352,7 @@ int main() {
         ws.close();
 #endif // _WIN32
         std::cout << "Disconnected" << std::endl;
+        log_file.write("Disconnected");
     });
 
     int     port = 4567;
@@ -319,11 +362,17 @@ int main() {
 #else
     if (h.listen(port)) {
 #endif // _WIN32
-        std::cout << "Listening to port " << port << std::endl;
+        std::stringstream   ss;
+        ss << "Listening to port " << port << ".";
+        std::cout << ss.str() << std::endl;
+        log_file.write(ss);
     } else {
-        std::cerr << "Failed to listen to port" << std::endl;
+        std::cerr << "Failed to listen to port " << port << "." << std::endl;
         return -1;
     }
   
     h.run();
+
+    std::cout << "End run" << std::endl;
+    log_file.write("End run");
 }
