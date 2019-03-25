@@ -1,12 +1,15 @@
 
 #include "trajectory.h"
 #include <algorithm>
+#include <iostream>
+#include <sstream>
 #include "constants.h"
 #include "helpers.h"
 #include "spline.h"
 #include "JMT.h"
+#include "debug.h"
 
-#define STAY_IN_CENTER_LANE 0
+#define STAY_IN_CENTER_LANE 1
 
 
 void StraightLineTrajectory(double car_x, double car_y, double car_yaw,
@@ -46,7 +49,7 @@ void CircleTrajectory(double car_x, double car_y, double car_yaw,
 
 void UpdateEgo(
     Vehicle& ego,
-    std::vector<Vehicle>& traffic,
+    std::map<int, std::vector<Vehicle>>& predictions,
     std::vector<double> previous_path_x, std::vector<double> previous_path_y) {
     // Update (lane, v) for the ego vehicle.
 
@@ -56,48 +59,94 @@ void UpdateEgo(
     bool    car_ahead = false;
     bool    car_left  = false;
     bool    car_right = false;
-    for (auto car : traffic) {
-        // Adjust the other vehicle 's' position by adding 'prev_path_size' steps.
-        // We know that each step is 20ms (0.02s) and that the other vehicle
-        // is moving at velocity 'car.v'.
-        double  t = prev_path_size * 0.02;
-        double  check_car_s = car.s + car.v * t;
+    //for (auto pred : predictions) {
+    //    auto    car = pred.second[0];
+    //    // Adjust the other vehicle 's' position by adding 'prev_path_size' steps.
+    //    // We know that each step is 20ms (0.02s) and that the other vehicle
+    //    // is moving at velocity 'car.v'.
+    //    //double  t = prev_path_size * UPDATE_INTERVAL;
+    //    //double  check_car_s = car.s + car.v * t;
 
-        // Identify whether other vehicle is ahead, to the left, or to the right.
-        switch (car.lane - ego.lane) {
-        case 0:     // Car in our lane.
-            // If the car is ahead of us and within the buffer distance, set the flag.
-            if (ego.s < check_car_s &&
-                        check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE))
-                car_ahead = true;
-            break;
-        case -1:    // Car to the left.
-            // If car is within the buffer distance of our location, set the flag.
-            if ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s &&
-                                                         check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE))
-                car_left = true;
-            break;
-        case 1:     // Car to the right.
-            // If car is within the buffer distance of our location, set the flag.
-            if ((ego.s - PREFERRED_BUFFER_LANE_CHANGE) < check_car_s &&
-                                                         check_car_s < (ego.s + PREFERRED_BUFFER_LANE_CHANGE))
-                car_right = true;
-            break;
+    //    double  t = (prev_path_size - 1) * UPDATE_INTERVAL;
+    //    double  check_car_s =
+    //        (pred.second.size() > prev_path_size)
+    //        ? pred.second[prev_path_size - 1].s
+    //        : car.s + car.v * t;
+
+    //    // Identify whether other vehicle is ahead, to the left, or to the right.
+    //    switch (car.lane - ego.lane) {
+    //    case 0:     // Car in our lane.
+    //        // If the car is ahead of us and within the buffer distance, set the flag.
+    //        if (ego.s < check_car_s &&
+    //                    check_car_s < (ego.s + PREFERRED_BUFFER))
+    //            car_ahead = true;
+    //        break;
+    //    case -1:    // Car to the left.
+    //        // If car is within the buffer distance of our location, set the flag.
+    //        if ((ego.s - PREFERRED_BUFFER) < check_car_s &&
+    //                                         check_car_s < (ego.s + PREFERRED_BUFFER))
+    //            car_left = true;
+    //        break;
+    //    case 1:     // Car to the right.
+    //        // If car is within the buffer distance of our location, set the flag.
+    //        if ((ego.s - PREFERRED_BUFFER) < check_car_s &&
+    //                                         check_car_s < (ego.s + PREFERRED_BUFFER))
+    //            car_right = true;
+    //        break;
+    //    }
+    //}
+
+    for (auto pred : predictions) {
+        for (auto car : pred.second) {
+            // Identify whether other vehicle is ahead, to the left, or to the right.
+            switch (car.lane - ego.lane) {
+            case 0:     // Car in our lane.
+                // If the car is ahead of us and within the buffer distance, set the flag.
+                if (ego.s < car.s &&
+                            car.s < (ego.s + PREFERRED_BUFFER))
+                    car_ahead = true;
+                break;
+            case -1:    // Car to the left.
+                // If car is within the buffer distance of our location, set the flag.
+                if ((ego.s - PREFERRED_BUFFER) < car.s &&
+                                                 car.s < (ego.s + PREFERRED_BUFFER))
+                    car_left = true;
+                break;
+            case 1:     // Car to the right.
+                // If car is within the buffer distance of our location, set the flag.
+                if ((ego.s - PREFERRED_BUFFER) < car.s &&
+                                                 car.s < (ego.s + PREFERRED_BUFFER))
+                    car_right = true;
+                break;
+            }
         }
     }
+
+    if (car_ahead)
+        log_file.write("car ahead");
+    if (car_left)
+        log_file.write("car left");
+    if (car_right)
+        log_file.write("car right");
 
     // Adjust speed to avoid collisions. Change lanes if it is safe to do so.
     if (car_ahead) {
         // A car is ahead - change lanes if we can, else slow down.
-        if (!car_left && ego.lane > 0)
+        if (!car_left && ego.lane > 0) {
             // No car to the left and we're not already in the left lane.
             ego.lane--;
-        else if (!car_right && ego.lane < MAX_LANE)
+            log_file.write("change lane left");
+        }
+        else if (!car_right && ego.lane < MAX_LANE) {
             // No car to the right and we're not already in the right lane.
             ego.lane++;
-        else
+            log_file.write("change lane right");
+        }
+        else {
             // We're boxed in so just slow down.
             ego.v -= MAX_ACCELERATION;
+            log_file.write("can't change lanes - slow down");
+        }
     } else {
 #if STAY_IN_CENTER_LANE
         // Stay in the center lane (lane 1) if possible.
@@ -110,13 +159,17 @@ void UpdateEgo(
         // Note: Make sure the vehicle is moving (velocity > 0) before changing
         // lanes. This will avoid excessive acceleration/jerk at initialization
         // since the vehicle does not start in the rightmost lane.
-        if (ego.v > 0.0 && ego.lane < MAX_LANE && !car_right)
+        if (ego.v > 0.0 && ego.lane < MAX_LANE && !car_right) {
             ego.lane++;
+            log_file.write("not in right lane - change lane right");
+        }
 #endif
 
         // If there is no car ahead and we're still below the speed limit, speed up!
-        if (ego.v < SPEED_LIMIT)
+        if (ego.v < SPEED_LIMIT) {
             ego.v += MAX_ACCELERATION;
+            log_file.write("below speed limit - speed up");
+        }
     }
 }
 
@@ -128,6 +181,11 @@ void PathPlannerTrajectory(
     // Generate a smooth path for the ego vehicle.
 
     int     prev_path_size = std::min(PREVIOUS_POINTS_TO_KEEP, (int) previous_path_x.size());
+
+    std::stringstream   ss;
+    log_file.write("PathPlannerTrajectory:");
+    ss << "  keep " << prev_path_size << " points";
+    log_file.write(ss);
 
     // Before adding new path points, add a few path points from the previous
     // cycle to maintain continuity.
@@ -141,8 +199,17 @@ void PathPlannerTrajectory(
     double  t = PATH_LENGTH * UPDATE_INTERVAL;
 
     // Distance traveled for each interval.
-    double  path_s = (ego.v > 0.0) ? ego.v * t : PATH_STEP;
+    // Make sure we plan at least PATH_STEP meters - this check is necessary
+    // in case our current speed is low.
+    double  path_s = std::max(ego.v * t, PATH_STEP);
 
+    // 'd' coordinate for the ego vehicle's current lane.
+    double  ego_d = lane_to_d(ego.lane);
+
+    ss << "  path_s " << path_s;
+    log_file.write(ss);
+    ss << "  (lane, lane_d) : (" << ego.lane << ", " << ego_d << ")";
+    log_file.write(ss);
 
     // Collect points for the path we want to follow.
     vector<double>  path_x;
@@ -158,10 +225,8 @@ void PathPlannerTrajectory(
     double  prev_x;
     double  prev_y;
     if (prev_path_size < 2) {
-        double  lane_d = lane_to_d(ego.lane);
-
         // Start at the current ego car position.
-        vector<double> xy = getXY(ego.s, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+        vector<double> xy = getXY(ego.s, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
         start_x = xy[0];
         start_y = xy[1];
 
@@ -177,7 +242,7 @@ void PathPlannerTrajectory(
         // car position, just backup by one path step interval in the same lane -
         // this removes the need to know 'car_yaw' and should prevent backing up
         // out of the current lane.
-        xy = getXY(ego.s - path_s, lane_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+        xy = getXY(ego.s - path_s, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
         prev_x = xy[0];
         prev_y = xy[1];
     } else {
@@ -195,11 +260,9 @@ void PathPlannerTrajectory(
     // Heading between the previous point and the start point is our current angle.
     angle = atan2(start_y - prev_y, start_x - prev_x);
 
-
     // Add waypoints for the current car position (s) at PATH_STEP increments,
     // staying in the same lane. This will ensure that our spline actually
     // follows the road.
-    double  ego_d = lane_to_d(ego.lane);
     for (int i = 1; i <= WAYPOINTS_TO_ADD; ++i) {
         vector<double> next_wp = getXY(ego.s + PATH_STEP * i , ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
         path_x.push_back(next_wp[0]); path_y.push_back(next_wp[1]);
@@ -242,7 +305,7 @@ void PathPlannerTrajectory(
     // The car moves every 0.02 seconds. So the distance traveled
     // for each car movement is just (0.02 * speed). Divide the
     // target distance by this value to get the number of steps.
-    double  N = target_dist / (0.02 * ego.v);
+    double  N = target_dist / (UPDATE_INTERVAL * ego.v);
 
     // Change in x required to get to our target value in N steps.
     double  delta_x = target_x / N;

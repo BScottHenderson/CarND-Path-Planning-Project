@@ -2,6 +2,7 @@
 #define TRAJECTORY_H
 
 #include <vector>
+#include <map>
 #include "vehicle.h"
 
 void StraightLineTrajectory(double car_x, double car_y, double car_yaw,
@@ -11,7 +12,7 @@ void CircleTrajectory(double car_x, double car_y, double car_yaw,
 
 void UpdateEgo(
     Vehicle& ego,
-    std::vector<Vehicle>& traffic,
+    std::map<int, std::vector<Vehicle>>& predictions,
     std::vector<double> previous_path_x, std::vector<double> previous_path_y);
 
 void PathPlannerTrajectory(
