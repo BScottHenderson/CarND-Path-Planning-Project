@@ -1,4 +1,4 @@
-
+#include "debug.h"
 #include "cost.h"
 #include <cmath>
 #include <functional>
@@ -6,20 +6,26 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include "vehicle.h"
 
 using std::string;
 using std::vector;
 
-#define DEBUG_OUTPUT    0
-
 /**
  * Weights for cost functions.
  */
-const double REACH_GOAL = 0.35;
-const double EFFICIENCY = 0.05;
-const double GOAL_LANE  = 0.10;
+//const double REACH_GOAL = 0.10;
+//const double EFFICIENCY = 0.15;
+//const double GOAL_LANE  = 0.25;
+//const double COLLISION  = 0.50;
+
+const double REACH_GOAL = 0.20;
+const double EFFICIENCY = 0.30;
+const double GOAL_LANE  = 0.00;
 const double COLLISION  = 0.50;
 
 // Here we have provided two possible suggestions for cost functions, but feel 
@@ -44,7 +50,7 @@ double goal_distance_cost(const Vehicle &vehicle,
     if (distance > 0) {
         int delta = (vehicle.goal_lane - (int) data["intended_lane"])
                   + (vehicle.goal_lane - (int) data["final_lane"]);
-        cost = (double) (1 - 2*exp(-(abs(delta) / distance)));
+        cost = (double) (1 - exp(-(abs(delta) / distance)));
     } else {
         cost = 1.0;
     }
@@ -61,17 +67,19 @@ double inefficiency_cost(const Vehicle &vehicle,
     // You can use the lane_speed function to determine the speed for a lane. 
     // This function is very similar to what you have already implemented in 
     //   the "Implement a Second Cost Function in C++" quiz.
-    double  proposed_speed_intended = lane_speed(predictions, (int) data["intended_lane"]);
+    //double  proposed_speed_intended = lane_speed(predictions, (int) data["intended_lane"]);
+    double  proposed_speed_intended = lane_speed_closest(predictions, (int) data["intended_lane"], vehicle.s);
     if (proposed_speed_intended < 0 || vehicle.target_speed < proposed_speed_intended)
         proposed_speed_intended = vehicle.target_speed;
 
-    double  proposed_speed_final = lane_speed(predictions, (int) data["final_lane"]);
+    //double  proposed_speed_final = lane_speed(predictions, (int) data["final_lane"]);
+    double  proposed_speed_final = lane_speed_closest(predictions, (int) data["final_lane"], vehicle.s);
     if (proposed_speed_final < 0 || vehicle.target_speed < proposed_speed_final)
         proposed_speed_final = vehicle.target_speed;
 
-#if DEBUG_OUTPUT
-    std::cout << "speed:(intended, final) = (" << proposed_speed_intended << ", " << proposed_speed_final << ")" << std::endl;
-#endif
+    std::stringstream   ss;
+    ss << "speed:(intended, final) = (" << proposed_speed_intended << ", " << proposed_speed_final << ")";
+    log_file.write(ss);
 
     double  delta = (vehicle.target_speed - proposed_speed_intended)
                   + (vehicle.target_speed - proposed_speed_final);
@@ -114,9 +122,9 @@ double collision_cost(const Vehicle &vehicle,
         if (proposed_speed_intended < 0)
             proposed_speed_intended = vehicle.v;
 
-#if DEBUG_OUTPUT
-        std::cout << "closest speed intended (" << intended_lane << ") = " << proposed_speed_intended << std::endl;
-#endif
+        std::stringstream   ss;
+        ss << "closest speed intended (" << intended_lane << ") = " << proposed_speed_intended;
+        log_file.write(ss);
 
         double  delta = vehicle.v - proposed_speed_intended;
         cost = (double) (1 - exp(-(abs(delta) / vehicle.v)));
@@ -133,9 +141,9 @@ double collision_cost(const Vehicle &vehicle,
 double lane_speed(const map<int, vector<Vehicle>> &predictions, int lane) {
     // All non ego vehicles in a lane have the same speed, so to get the speed 
     //   limit for a lane, we can just find one vehicle in that lane.
-    for (auto i = predictions.begin(); i != predictions.end(); ++i) {
-        int     key     = i->first;
-        Vehicle vehicle = i->second[0];
+    for (auto pred : predictions) {
+        int     key     = pred.first;
+        Vehicle vehicle = (pred.second)[0];
         if (vehicle.lane == lane && key != -1)
             return vehicle.v;
     }
@@ -145,7 +153,7 @@ double lane_speed(const map<int, vector<Vehicle>> &predictions, int lane) {
 }
 
 double lane_speed_closest(const map<int, vector<Vehicle>> &predictions, int lane, double s) {
-    // Find the non-ego vehicle in the specified lane that is closest the ego
+    // Find the non-ego vehicle in the specified lane that is closest to the ego
     //   vehicle and return its speed.
     double  speed = -1.0;
 
@@ -185,13 +193,21 @@ double calculate_cost(const Vehicle &vehicle,
                                 map<string, double> &)
     >> cf_list = {goal_distance_cost, inefficiency_cost, goal_lane_cost, collision_cost};
 
+    vector<string> cf_name_list = {"goal_distance", "inefficiency", "goal_lane", "collision"};
+    size_t  max_name_len =
+        (std::max_element(cf_name_list.begin(), cf_name_list.end(),
+            [] (string const& a, string const& b)
+            {
+                return a.length() < b.length();
+            }))->length();
+
     vector<double> weight_list = {REACH_GOAL, EFFICIENCY, GOAL_LANE, COLLISION};
-    
+
+    std::stringstream   ss;
     for (int i = 0; i < cf_list.size(); ++i) {
         double  c = cf_list[i](vehicle, trajectory, predictions, trajectory_data);
-#if DEBUG_OUTPUT
-        std::cout << "(weight, cost) = (" << weight_list[i] << ", " << c << ")" << std::endl;
-#endif
+        ss << std::setw(max_name_len) << std::left << cf_name_list[i] << ":" << "(weight, cost) = (" << weight_list[i] << ", " << c << ")";
+        log_file.write(ss);
         double   new_cost = weight_list[i] * c;
         cost += new_cost;
     }
