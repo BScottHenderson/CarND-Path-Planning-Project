@@ -13,9 +13,11 @@
   <ItemGroup>
     <ClInclude Include="..\src\constants.h" />
     <ClInclude Include="..\src\cost.h" />
+    <ClInclude Include="..\src\debug.h" />
     <ClInclude Include="..\src\helpers.h" />
     <ClInclude Include="..\src\JMT.h" />
     <ClInclude Include="..\src\json.hpp" />
+    <ClInclude Include="..\src\log_writer.h" />
     <ClInclude Include="..\src\spline.h" />
     <ClInclude Include="..\src\trajectory.h" />
     <ClInclude Include="..\src\vehicle.h" />
@@ -24,6 +26,7 @@
     <ClCompile Include="..\src\cost.cpp" />
     <ClCompile Include="..\src\helpers.cpp" />
     <ClCompile Include="..\src\JMT.cpp" />
+    <ClCompile Include="..\src\log_writer.cpp" />
     <ClCompile Include="..\src\main.cpp" />
     <ClCompile Include="..\src\trajectory.cpp" />
     <ClCompile Include="..\src\vehicle.cpp" />
