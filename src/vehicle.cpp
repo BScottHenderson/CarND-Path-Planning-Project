@@ -254,7 +254,7 @@ vector<double> Vehicle::get_kinematics(map<int, vector<Vehicle>> &predictions,
     ss << "get_kinematics(lane=" << lane << ")";
     log_file.write_html_details_header(ss);
     if (car_ahead) {
-        ss << "  car ahead: " << vehicle_ahead.to_string();
+        ss << "  car ahead:  " << vehicle_ahead.to_string();
         log_file.write(ss);
         ss << "  max_velocity_in_front    = " << max_velocity_in_front;
         log_file.write(ss);
