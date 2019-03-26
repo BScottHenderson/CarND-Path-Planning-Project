@@ -18,14 +18,9 @@ using std::vector;
 /**
  * Weights for cost functions.
  */
-//const double REACH_GOAL = 0.10;
-//const double EFFICIENCY = 0.15;
-//const double GOAL_LANE  = 0.25;
-//const double COLLISION  = 0.50;
-
-const double REACH_GOAL = 0.20;
-const double EFFICIENCY = 0.30;
-const double GOAL_LANE  = 0.00;
+const double REACH_GOAL = 0.10;
+const double EFFICIENCY = 0.15;
+const double GOAL_LANE  = 0.25;
 const double COLLISION  = 0.50;
 
 // Here we have provided two possible suggestions for cost functions, but feel 
@@ -122,10 +117,6 @@ double collision_cost(const Vehicle &vehicle,
         if (proposed_speed_intended < 0)
             proposed_speed_intended = vehicle.v;
 
-        std::stringstream   ss;
-        ss << "closest speed intended (" << intended_lane << ") = " << proposed_speed_intended;
-        log_file.write(ss);
-
         double  delta = vehicle.v - proposed_speed_intended;
         cost = (double) (1 - exp(-(abs(delta) / vehicle.v)));
     } else {
@@ -157,6 +148,9 @@ double lane_speed_closest(const map<int, vector<Vehicle>> &predictions, int lane
     //   vehicle and return its speed.
     double  speed = -1.0;
 
+    std::stringstream   ss;
+    ss << "lane_speed_closest(predictions, lane=" << lane << ", s=" << s << "):";
+    log_file.write(ss);
     double  min_dist = std::numeric_limits<double>::max();
     for (auto pred : predictions) {
         int             key    = pred.first;
@@ -168,6 +162,8 @@ double lane_speed_closest(const map<int, vector<Vehicle>> &predictions, int lane
                     // the target 's' value which will ensure that these vehicles
                     // are used for the min distance.
                     double  dist = vehicle.s - s;
+                    ss << "  vehicle in target lane: v=" << vehicle.v << ", s=" << vehicle.s << ", distance=" << dist;
+                    log_file.write(ss);
                     if (dist < min_dist) {
                         min_dist = dist;
                         speed = vehicle.v;
@@ -176,6 +172,8 @@ double lane_speed_closest(const map<int, vector<Vehicle>> &predictions, int lane
             }
         }
     }
+    ss << "lane_speed_closest(predictions, lane=" << lane << ", s=" << s << "): " << speed;
+    log_file.write(ss);
 
     return speed;
 }
