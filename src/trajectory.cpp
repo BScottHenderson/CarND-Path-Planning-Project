@@ -242,7 +242,11 @@ void PathPlannerTrajectory(
         // car position, just backup by one path step interval in the same lane -
         // this removes the need to know 'car_yaw' and should prevent backing up
         // out of the current lane.
-        xy = getXY(ego.s - path_s, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+        double  prev_s =
+            (path_s > ego.s)    // Handle wrap-around if we're at position 0.
+            ? MAX_S - path_s + ego.s
+            : ego.s - path_s;
+        xy = getXY(prev_s, ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
         prev_x = xy[0];
         prev_y = xy[1];
     } else {
@@ -264,7 +268,7 @@ void PathPlannerTrajectory(
     // staying in the same lane. This will ensure that our spline actually
     // follows the road.
     for (int i = 1; i <= WAYPOINTS_TO_ADD; ++i) {
-        vector<double> next_wp = getXY(ego.s + PATH_STEP * i , ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+        vector<double> next_wp = getXY(ego.s + path_s * i , ego_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
         path_x.push_back(next_wp[0]); path_y.push_back(next_wp[1]);
     }
 
