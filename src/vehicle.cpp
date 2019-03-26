@@ -108,8 +108,7 @@ vector<Vehicle> Vehicle::choose_next_state(map<int, vector<Vehicle>> &prediction
     vector<std::pair<double, vector<Vehicle>>>  costs;
 
     // For each state that is a possible successor to the current state ...
-    vector<string>  states = this->successor_states();
-    for (auto state : states) {
+    for (auto state : this->successor_states()) {
         // Generate a rough idea of the trajectory we would follow if we chose this state.
         vector<Vehicle> trajectory_for_state = generate_trajectory(state, predictions);
 
