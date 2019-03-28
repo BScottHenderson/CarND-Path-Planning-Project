@@ -17,7 +17,6 @@
 #include "constants.h"
 #include "helpers.h"
 #include "spline.h"
-#include "JMT.h"
 #include "trajectory.h"
 #include "vehicle.h"
 #include "log_writer.h"
@@ -288,9 +287,10 @@ int main(int argc, char *argv[]) {
                     // Generate a trajectory using the update ego information.
                     PathPlannerTrajectory(
                         ego,
-                        map_waypoints_x, map_waypoints_y, map_waypoints_s,
-                        previous_path_x, previous_path_y,
-                        next_x_vals,     next_y_vals);
+                        map_waypoints_x,  map_waypoints_y,  map_waypoints_s,
+                        map_waypoints_dx, map_waypoints_dy,
+                        previous_path_x,  previous_path_y,
+                        next_x_vals,      next_y_vals);
 
                     //StraightLineTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
                     //CircleTrajectory(car_x, car_y, car_yaw, next_x_vals, next_y_vals);
